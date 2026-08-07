@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DemoRouteImport } from './routes/demo'
 import { Route as MarketRouteImport } from './routes/market'
 import { Route as ProductRouteImport } from './routes/product'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
@@ -17,6 +18,11 @@ import { Route as RoadmapRouteImport } from './routes/roadmap'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoRoute = DemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MarketRoute = MarketRouteImport.update({
@@ -37,12 +43,14 @@ const RoadmapRoute = RoadmapRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/demo': typeof DemoRoute
   '/market': typeof MarketRoute
   '/product': typeof ProductRoute
   '/roadmap': typeof RoadmapRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/demo': typeof DemoRoute
   '/market': typeof MarketRoute
   '/product': typeof ProductRoute
   '/roadmap': typeof RoadmapRoute
@@ -50,20 +58,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/demo': typeof DemoRoute
   '/market': typeof MarketRoute
   '/product': typeof ProductRoute
   '/roadmap': typeof RoadmapRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/market' | '/product' | '/roadmap'
+  fullPaths: '/' | '/demo' | '/market' | '/product' | '/roadmap'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/market' | '/product' | '/roadmap'
-  id: '__root__' | '/' | '/market' | '/product' | '/roadmap'
+  to: '/' | '/demo' | '/market' | '/product' | '/roadmap'
+  id: '__root__' | '/' | '/demo' | '/market' | '/product' | '/roadmap'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DemoRoute: typeof DemoRoute
   MarketRoute: typeof MarketRoute
   ProductRoute: typeof ProductRoute
   RoadmapRoute: typeof RoadmapRoute
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo': {
+      id: '/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/market': {
@@ -104,6 +121,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DemoRoute: DemoRoute,
   MarketRoute: MarketRoute,
   ProductRoute: ProductRoute,
   RoadmapRoute: RoadmapRoute,
