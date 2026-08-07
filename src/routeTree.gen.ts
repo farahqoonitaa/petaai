@@ -10,33 +10,123 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DemoRouteImport } from './routes/demo'
+import { Route as MarketRouteImport } from './routes/market'
+import { Route as ProductRouteImport } from './routes/product'
+import { Route as RoadmapRouteImport } from './routes/roadmap'
+import { Route as DemoIndexRouteImport } from './routes/demo.index'
+import { Route as DemoGraphRouteImport } from './routes/demo.graph'
+import { Route as DemoSimulatorRouteImport } from './routes/demo.simulator'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoRoute = DemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketRoute = MarketRouteImport.update({
+  id: '/market',
+  path: '/market',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductRoute = ProductRouteImport.update({
+  id: '/product',
+  path: '/product',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoadmapRoute = RoadmapRouteImport.update({
+  id: '/roadmap',
+  path: '/roadmap',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoIndexRoute = DemoIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DemoRoute,
+} as any)
+const DemoGraphRoute = DemoGraphRouteImport.update({
+  id: '/graph',
+  path: '/graph',
+  getParentRoute: () => DemoRoute,
+} as any)
+const DemoSimulatorRoute = DemoSimulatorRouteImport.update({
+  id: '/simulator',
+  path: '/simulator',
+  getParentRoute: () => DemoRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/demo': typeof DemoRouteWithChildren
+  '/market': typeof MarketRoute
+  '/product': typeof ProductRoute
+  '/roadmap': typeof RoadmapRoute
+  '/demo/graph': typeof DemoGraphRoute
+  '/demo/simulator': typeof DemoSimulatorRoute
+  '/demo/': typeof DemoIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/market': typeof MarketRoute
+  '/product': typeof ProductRoute
+  '/roadmap': typeof RoadmapRoute
+  '/demo/graph': typeof DemoGraphRoute
+  '/demo/simulator': typeof DemoSimulatorRoute
+  '/demo': typeof DemoIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/demo': typeof DemoRouteWithChildren
+  '/market': typeof MarketRoute
+  '/product': typeof ProductRoute
+  '/roadmap': typeof RoadmapRoute
+  '/demo/graph': typeof DemoGraphRoute
+  '/demo/simulator': typeof DemoSimulatorRoute
+  '/demo/': typeof DemoIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/demo'
+    | '/market'
+    | '/product'
+    | '/roadmap'
+    | '/demo/graph'
+    | '/demo/simulator'
+    | '/demo/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/market'
+    | '/product'
+    | '/roadmap'
+    | '/demo/graph'
+    | '/demo/simulator'
+    | '/demo'
+  id:
+    | '__root__'
+    | '/'
+    | '/demo'
+    | '/market'
+    | '/product'
+    | '/roadmap'
+    | '/demo/graph'
+    | '/demo/simulator'
+    | '/demo/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DemoRoute: typeof DemoRouteWithChildren
+  MarketRoute: typeof MarketRoute
+  ProductRoute: typeof ProductRoute
+  RoadmapRoute: typeof RoadmapRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,22 +138,79 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/demo': {
+      id: '/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof DemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/market': {
+      id: '/market'
+      path: '/market'
+      fullPath: '/market'
+      preLoaderRoute: typeof MarketRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/product': {
+      id: '/product'
+      path: '/product'
+      fullPath: '/product'
+      preLoaderRoute: typeof ProductRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/roadmap': {
+      id: '/roadmap'
+      path: '/roadmap'
+      fullPath: '/roadmap'
+      preLoaderRoute: typeof RoadmapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo/': {
+      id: '/demo/'
+      path: '/'
+      fullPath: '/demo/'
+      preLoaderRoute: typeof DemoIndexRouteImport
+      parentRoute: typeof DemoRoute
+    }
+    '/demo/graph': {
+      id: '/demo/graph'
+      path: '/graph'
+      fullPath: '/demo/graph'
+      preLoaderRoute: typeof DemoGraphRouteImport
+      parentRoute: typeof DemoRoute
+    }
+    '/demo/simulator': {
+      id: '/demo/simulator'
+      path: '/simulator'
+      fullPath: '/demo/simulator'
+      preLoaderRoute: typeof DemoSimulatorRouteImport
+      parentRoute: typeof DemoRoute
+    }
   }
 }
 
+interface DemoRouteChildren {
+  DemoGraphRoute: typeof DemoGraphRoute
+  DemoSimulatorRoute: typeof DemoSimulatorRoute
+  DemoIndexRoute: typeof DemoIndexRoute
+}
+
+const DemoRouteChildren: DemoRouteChildren = {
+  DemoGraphRoute: DemoGraphRoute,
+  DemoSimulatorRoute: DemoSimulatorRoute,
+  DemoIndexRoute: DemoIndexRoute,
+}
+
+const DemoRouteWithChildren = DemoRoute._addFileChildren(DemoRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DemoRoute: DemoRouteWithChildren,
+  MarketRoute: MarketRoute,
+  ProductRoute: ProductRoute,
+  RoadmapRoute: RoadmapRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
