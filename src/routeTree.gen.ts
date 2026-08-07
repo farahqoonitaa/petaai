@@ -14,6 +14,7 @@ import { Route as DemoRouteImport } from './routes/demo'
 import { Route as MarketRouteImport } from './routes/market'
 import { Route as ProductRouteImport } from './routes/product'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
+import { Route as DemoIndexRouteImport } from './routes/demo.index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,40 +41,48 @@ const RoadmapRoute = RoadmapRouteImport.update({
   path: '/roadmap',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoIndexRoute = DemoIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DemoRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/demo': typeof DemoRoute
+  '/demo': typeof DemoRouteWithChildren
   '/market': typeof MarketRoute
   '/product': typeof ProductRoute
   '/roadmap': typeof RoadmapRoute
+  '/demo/': typeof DemoIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/demo': typeof DemoRoute
   '/market': typeof MarketRoute
   '/product': typeof ProductRoute
   '/roadmap': typeof RoadmapRoute
+  '/demo': typeof DemoIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/demo': typeof DemoRoute
+  '/demo': typeof DemoRouteWithChildren
   '/market': typeof MarketRoute
   '/product': typeof ProductRoute
   '/roadmap': typeof RoadmapRoute
+  '/demo/': typeof DemoIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/demo' | '/market' | '/product' | '/roadmap'
+  fullPaths: '/' | '/demo' | '/market' | '/product' | '/roadmap' | '/demo/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/demo' | '/market' | '/product' | '/roadmap'
-  id: '__root__' | '/' | '/demo' | '/market' | '/product' | '/roadmap'
+  to: '/' | '/market' | '/product' | '/roadmap' | '/demo'
+  id:
+    '__root__' | '/' | '/demo' | '/market' | '/product' | '/roadmap' | '/demo/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DemoRoute: typeof DemoRoute
+  DemoRoute: typeof DemoRouteWithChildren
   MarketRoute: typeof MarketRoute
   ProductRoute: typeof ProductRoute
   RoadmapRoute: typeof RoadmapRoute
@@ -116,12 +125,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RoadmapRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/demo/': {
+      id: '/demo/'
+      path: '/'
+      fullPath: '/demo/'
+      preLoaderRoute: typeof DemoIndexRouteImport
+      parentRoute: typeof DemoRoute
+    }
   }
 }
 
+interface DemoRouteChildren {
+  DemoIndexRoute: typeof DemoIndexRoute
+}
+
+const DemoRouteChildren: DemoRouteChildren = {
+  DemoIndexRoute: DemoIndexRoute,
+}
+
+const DemoRouteWithChildren = DemoRoute._addFileChildren(DemoRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DemoRoute: DemoRoute,
+  DemoRoute: DemoRouteWithChildren,
   MarketRoute: MarketRoute,
   ProductRoute: ProductRoute,
   RoadmapRoute: RoadmapRoute,
