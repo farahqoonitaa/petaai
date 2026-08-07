@@ -393,7 +393,7 @@ export const FINDINGS: Finding[] = [
   {
     id: "PA-0121",
     severity: "medium",
-    agent: "sdq" as AgentId,
+    agent: "sdg",
     title: "Double-counting risk in SDG reporting across two water programs",
     detail:
       "Two programs map to the same SDG indicator with overlapping beneficiary definitions, creating a plausible double-count in national reporting.",
