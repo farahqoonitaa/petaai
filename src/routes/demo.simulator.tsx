@@ -24,9 +24,11 @@ export const Route = createFileRoute("/demo/simulator")({
 });
 
 function SimulatorPage() {
-  const [activeId, setActiveId] = useState(SIM_SCENARIOS[0].id);
+  const [activeId, setActiveId] = useState<string>(SIM_SCENARIOS[0]?.id ?? "");
   const [revealed, setRevealed] = useState(false);
   const scenario = SIM_SCENARIOS.find((s) => s.id === activeId) ?? SIM_SCENARIOS[0];
+
+  if (!scenario) return null;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[19rem_1fr]">
