@@ -15,6 +15,7 @@ import { Route as MarketRouteImport } from './routes/market'
 import { Route as ProductRouteImport } from './routes/product'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as DemoIndexRouteImport } from './routes/demo.index'
+import { Route as DemoGraphRouteImport } from './routes/demo.graph'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +47,11 @@ const DemoIndexRoute = DemoIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DemoRoute,
 } as any)
+const DemoGraphRoute = DemoGraphRouteImport.update({
+  id: '/graph',
+  path: '/graph',
+  getParentRoute: () => DemoRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -53,6 +59,7 @@ export interface FileRoutesByFullPath {
   '/market': typeof MarketRoute
   '/product': typeof ProductRoute
   '/roadmap': typeof RoadmapRoute
+  '/demo/graph': typeof DemoGraphRoute
   '/demo/': typeof DemoIndexRoute
 }
 export interface FileRoutesByTo {
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/market': typeof MarketRoute
   '/product': typeof ProductRoute
   '/roadmap': typeof RoadmapRoute
+  '/demo/graph': typeof DemoGraphRoute
   '/demo': typeof DemoIndexRoute
 }
 export interface FileRoutesById {
@@ -69,15 +77,30 @@ export interface FileRoutesById {
   '/market': typeof MarketRoute
   '/product': typeof ProductRoute
   '/roadmap': typeof RoadmapRoute
+  '/demo/graph': typeof DemoGraphRoute
   '/demo/': typeof DemoIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/demo' | '/market' | '/product' | '/roadmap' | '/demo/'
+  fullPaths:
+    | '/'
+    | '/demo'
+    | '/market'
+    | '/product'
+    | '/roadmap'
+    | '/demo/graph'
+    | '/demo/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/market' | '/product' | '/roadmap' | '/demo'
+  to: '/' | '/market' | '/product' | '/roadmap' | '/demo/graph' | '/demo'
   id:
-    '__root__' | '/' | '/demo' | '/market' | '/product' | '/roadmap' | '/demo/'
+    | '__root__'
+    | '/'
+    | '/demo'
+    | '/market'
+    | '/product'
+    | '/roadmap'
+    | '/demo/graph'
+    | '/demo/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,14 +155,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoIndexRouteImport
       parentRoute: typeof DemoRoute
     }
+    '/demo/graph': {
+      id: '/demo/graph'
+      path: '/graph'
+      fullPath: '/demo/graph'
+      preLoaderRoute: typeof DemoGraphRouteImport
+      parentRoute: typeof DemoRoute
+    }
   }
 }
 
 interface DemoRouteChildren {
+  DemoGraphRoute: typeof DemoGraphRoute
   DemoIndexRoute: typeof DemoIndexRoute
 }
 
 const DemoRouteChildren: DemoRouteChildren = {
+  DemoGraphRoute: DemoGraphRoute,
   DemoIndexRoute: DemoIndexRoute,
 }
 
