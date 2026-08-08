@@ -14,9 +14,14 @@ import { Route as DemoRouteImport } from './routes/demo'
 import { Route as MarketRouteImport } from './routes/market'
 import { Route as ProductRouteImport } from './routes/product'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
+import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as DemoIndexRouteImport } from './routes/demo.index'
 import { Route as DemoGraphRouteImport } from './routes/demo.graph'
 import { Route as DemoSimulatorRouteImport } from './routes/demo.simulator'
+import { Route as WorkspaceIndexRouteImport } from './routes/workspace.index'
+import { Route as WorkspaceCorpusRouteImport } from './routes/workspace.corpus'
+import { Route as WorkspaceRunsIndexRouteImport } from './routes/workspace.runs.index'
+import { Route as WorkspaceRunsRunIdRouteImport } from './routes/workspace.runs.$runId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -43,6 +48,11 @@ const RoadmapRoute = RoadmapRouteImport.update({
   path: '/roadmap',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkspaceRoute = WorkspaceRouteImport.update({
+  id: '/workspace',
+  path: '/workspace',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DemoIndexRoute = DemoIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -58,6 +68,26 @@ const DemoSimulatorRoute = DemoSimulatorRouteImport.update({
   path: '/simulator',
   getParentRoute: () => DemoRoute,
 } as any)
+const WorkspaceIndexRoute = WorkspaceIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
+const WorkspaceCorpusRoute = WorkspaceCorpusRouteImport.update({
+  id: '/corpus',
+  path: '/corpus',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
+const WorkspaceRunsIndexRoute = WorkspaceRunsIndexRouteImport.update({
+  id: '/runs/',
+  path: '/runs/',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
+const WorkspaceRunsRunIdRoute = WorkspaceRunsRunIdRouteImport.update({
+  id: '/runs/$runId',
+  path: '/runs/$runId',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -65,9 +95,14 @@ export interface FileRoutesByFullPath {
   '/market': typeof MarketRoute
   '/product': typeof ProductRoute
   '/roadmap': typeof RoadmapRoute
+  '/workspace': typeof WorkspaceRouteWithChildren
   '/demo/graph': typeof DemoGraphRoute
   '/demo/simulator': typeof DemoSimulatorRoute
+  '/workspace/corpus': typeof WorkspaceCorpusRoute
   '/demo/': typeof DemoIndexRoute
+  '/workspace/': typeof WorkspaceIndexRoute
+  '/workspace/runs/$runId': typeof WorkspaceRunsRunIdRoute
+  '/workspace/runs/': typeof WorkspaceRunsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -76,7 +111,11 @@ export interface FileRoutesByTo {
   '/roadmap': typeof RoadmapRoute
   '/demo/graph': typeof DemoGraphRoute
   '/demo/simulator': typeof DemoSimulatorRoute
+  '/workspace/corpus': typeof WorkspaceCorpusRoute
   '/demo': typeof DemoIndexRoute
+  '/workspace': typeof WorkspaceIndexRoute
+  '/workspace/runs/$runId': typeof WorkspaceRunsRunIdRoute
+  '/workspace/runs': typeof WorkspaceRunsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -85,9 +124,14 @@ export interface FileRoutesById {
   '/market': typeof MarketRoute
   '/product': typeof ProductRoute
   '/roadmap': typeof RoadmapRoute
+  '/workspace': typeof WorkspaceRouteWithChildren
   '/demo/graph': typeof DemoGraphRoute
   '/demo/simulator': typeof DemoSimulatorRoute
+  '/workspace/corpus': typeof WorkspaceCorpusRoute
   '/demo/': typeof DemoIndexRoute
+  '/workspace/': typeof WorkspaceIndexRoute
+  '/workspace/runs/$runId': typeof WorkspaceRunsRunIdRoute
+  '/workspace/runs/': typeof WorkspaceRunsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,9 +141,14 @@ export interface FileRouteTypes {
     | '/market'
     | '/product'
     | '/roadmap'
+    | '/workspace'
     | '/demo/graph'
     | '/demo/simulator'
+    | '/workspace/corpus'
     | '/demo/'
+    | '/workspace/'
+    | '/workspace/runs/$runId'
+    | '/workspace/runs/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -108,7 +157,11 @@ export interface FileRouteTypes {
     | '/roadmap'
     | '/demo/graph'
     | '/demo/simulator'
+    | '/workspace/corpus'
     | '/demo'
+    | '/workspace'
+    | '/workspace/runs/$runId'
+    | '/workspace/runs'
   id:
     | '__root__'
     | '/'
@@ -116,9 +169,14 @@ export interface FileRouteTypes {
     | '/market'
     | '/product'
     | '/roadmap'
+    | '/workspace'
     | '/demo/graph'
     | '/demo/simulator'
+    | '/workspace/corpus'
     | '/demo/'
+    | '/workspace/'
+    | '/workspace/runs/$runId'
+    | '/workspace/runs/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -127,6 +185,7 @@ export interface RootRouteChildren {
   MarketRoute: typeof MarketRoute
   ProductRoute: typeof ProductRoute
   RoadmapRoute: typeof RoadmapRoute
+  WorkspaceRoute: typeof WorkspaceRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -166,6 +225,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RoadmapRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workspace': {
+      id: '/workspace'
+      path: '/workspace'
+      fullPath: '/workspace'
+      preLoaderRoute: typeof WorkspaceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/demo/': {
       id: '/demo/'
       path: '/'
@@ -187,6 +253,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoSimulatorRouteImport
       parentRoute: typeof DemoRoute
     }
+    '/workspace/': {
+      id: '/workspace/'
+      path: '/'
+      fullPath: '/workspace/'
+      preLoaderRoute: typeof WorkspaceIndexRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/workspace/corpus': {
+      id: '/workspace/corpus'
+      path: '/corpus'
+      fullPath: '/workspace/corpus'
+      preLoaderRoute: typeof WorkspaceCorpusRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/workspace/runs/': {
+      id: '/workspace/runs/'
+      path: '/runs'
+      fullPath: '/workspace/runs/'
+      preLoaderRoute: typeof WorkspaceRunsIndexRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/workspace/runs/$runId': {
+      id: '/workspace/runs/$runId'
+      path: '/runs/$runId'
+      fullPath: '/workspace/runs/$runId'
+      preLoaderRoute: typeof WorkspaceRunsRunIdRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
   }
 }
 
@@ -204,12 +298,31 @@ const DemoRouteChildren: DemoRouteChildren = {
 
 const DemoRouteWithChildren = DemoRoute._addFileChildren(DemoRouteChildren)
 
+interface WorkspaceRouteChildren {
+  WorkspaceCorpusRoute: typeof WorkspaceCorpusRoute
+  WorkspaceIndexRoute: typeof WorkspaceIndexRoute
+  WorkspaceRunsRunIdRoute: typeof WorkspaceRunsRunIdRoute
+  WorkspaceRunsIndexRoute: typeof WorkspaceRunsIndexRoute
+}
+
+const WorkspaceRouteChildren: WorkspaceRouteChildren = {
+  WorkspaceCorpusRoute: WorkspaceCorpusRoute,
+  WorkspaceIndexRoute: WorkspaceIndexRoute,
+  WorkspaceRunsRunIdRoute: WorkspaceRunsRunIdRoute,
+  WorkspaceRunsIndexRoute: WorkspaceRunsIndexRoute,
+}
+
+const WorkspaceRouteWithChildren = WorkspaceRoute._addFileChildren(
+  WorkspaceRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DemoRoute: DemoRouteWithChildren,
   MarketRoute: MarketRoute,
   ProductRoute: ProductRoute,
   RoadmapRoute: RoadmapRoute,
+  WorkspaceRoute: WorkspaceRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

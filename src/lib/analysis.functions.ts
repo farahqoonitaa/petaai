@@ -1,0 +1,350 @@
+import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { z } from "zod";
+import { AGENT_BY_ID, type AgentId } from "./peta-agents";
+
+const AGENT_IDS = [
+  "stigmergic_tracer",
+  "contradiction_detector",
+  "budget_coherence",
+  "regional_signal",
+  "historical_precedent",
+  "sdg_alignment",
+] as const;
+
+const StartRun = z.object({
+  mode: z.enum(["focused", "full_swarm"]),
+  agents: z.array(z.enum(AGENT_IDS)).min(1).max(6),
+  documentIds: z.array(z.string().uuid()).min(1).max(60),
+  sliceLabel: z.string().trim().min(1).max(120),
+  yearFrom: z.number().int().min(1990).max(2060).nullable(),
+  yearTo: z.number().int().min(1990).max(2060).nullable(),
+});
+
+export const startRun = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => StartRun.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: docs, error: docErr } = await context.supabase
+      .from("corpus_documents")
+      .select("id, title, doc_year, status, chunk_count")
+      .in("id", data.documentIds);
+    if (docErr) throw new Error(docErr.message);
+
+    const ready = (docs ?? []).filter((d) => d.status === "ready" && (d.chunk_count ?? 0) > 0);
+    if (ready.length === 0)
+      throw new Error("None of the selected documents finished indexing — nothing to analyse.");
+
+    const warnings: string[] = [];
+    if (ready.length < data.documentIds.length)
+      warnings.push(
+        `${data.documentIds.length - ready.length} selected document(s) are not indexed and were excluded.`,
+      );
+    if (data.yearFrom !== null && data.yearTo !== null) {
+      const outside = ready.filter(
+        (d) => d.doc_year !== null && (d.doc_year < data.yearFrom! || d.doc_year > data.yearTo!),
+      );
+      if (outside.length)
+        warnings.push(
+          `${outside.length} document(s) fall outside ${data.sliceLabel}; findings from them are slice-inconsistent.`,
+        );
+      const inside = ready.filter(
+        (d) => d.doc_year === null || (d.doc_year >= data.yearFrom! && d.doc_year <= data.yearTo!),
+      );
+      if (inside.length === 0)
+        warnings.push("No document in this slice matches the selected epoch — coverage is empty.");
+    }
+    if (ready.length < 3)
+      warnings.push(
+        "Thin corpus: cross-document contradiction and dependency detection needs several ministries' documents to be meaningful.",
+      );
+
+    const { data: run, error } = await context.supabase
+      .from("analysis_runs")
+      .insert({
+        user_id: context.userId,
+        mode: data.mode,
+        agents: data.agents,
+        document_ids: ready.map((d) => d.id),
+        slice_label: data.sliceLabel,
+        year_from: data.yearFrom,
+        year_to: data.yearTo,
+        status: "running",
+        coverage_warning: warnings.length ? warnings.join(" ") : null,
+      })
+      .select("id, coverage_warning")
+      .single();
+    if (error) throw new Error(error.message);
+
+    return {
+      runId: run.id as string,
+      documentCount: ready.length,
+      coverageWarning: (run.coverage_warning as string | null) ?? null,
+    };
+  });
+
+interface Passage {
+  id: string;
+  documentId: string;
+  title: string;
+  page: number;
+  content: string;
+  similarity: number;
+}
+
+const FINDINGS_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  required: ["findings", "no_findings_reason"],
+  properties: {
+    no_findings_reason: {
+      type: ["string", "null"],
+      description: "If findings is empty, why this slice yielded nothing for this agent.",
+    },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "title",
+          "detail",
+          "severity",
+          "confidence",
+          "programs",
+          "ministries",
+          "passage_number",
+          "quote",
+          "recommended_action",
+        ],
+        properties: {
+          title: { type: "string" },
+          detail: { type: "string" },
+          severity: { type: "string", enum: ["critical", "high", "medium"] },
+          confidence: { type: "number" },
+          programs: { type: "array", items: { type: "string" } },
+          ministries: { type: "array", items: { type: "string" } },
+          passage_number: {
+            type: ["integer", "null"],
+            description: "The [P#] number of the passage this finding is grounded in.",
+          },
+          quote: { type: "string", description: "Verbatim span from that passage." },
+          recommended_action: { type: "string" },
+        },
+      },
+    },
+  },
+};
+
+interface AgentOutput {
+  no_findings_reason: string | null;
+  findings: {
+    title: string;
+    detail: string;
+    severity: "critical" | "high" | "medium";
+    confidence: number;
+    programs: string[];
+    ministries: string[];
+    passage_number: number | null;
+    quote: string;
+    recommended_action: string;
+  }[];
+}
+
+export const runAgentPass = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ runId: z.string().uuid(), agent: z.enum(AGENT_IDS) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const spec = AGENT_BY_ID.get(data.agent as AgentId);
+    if (!spec) throw new Error("Unknown agent");
+
+    const { data: run, error: runErr } = await context.supabase
+      .from("analysis_runs")
+      .select("id, document_ids, slice_label, year_from, year_to")
+      .eq("id", data.runId)
+      .single();
+    if (runErr) throw new Error(runErr.message);
+
+    const documentIds = (run.document_ids as string[]) ?? [];
+    const { data: docs } = await context.supabase
+      .from("corpus_documents")
+      .select("id, title, ministry, doc_type, doc_year")
+      .in("id", documentIds);
+    const docById = new Map((docs ?? []).map((d) => [d.id as string, d]));
+
+    const { embedTexts, generateStructured } = await import("./ai-gateway.server");
+
+    // Stage 1 — dense retrieval across this agent's probes.
+    const probeVectors = await embedTexts(spec.probes);
+    const byId = new Map<string, Passage>();
+    for (const vec of probeVectors) {
+      const { data: matches, error } = await context.supabase.rpc("match_chunks", {
+        query_embedding: JSON.stringify(vec),
+        doc_ids: documentIds,
+        match_count: 8,
+      });
+      if (error) throw new Error(error.message);
+      for (const m of (matches ?? []) as {
+        id: string;
+        document_id: string;
+        page_hint: number | null;
+        content: string;
+        similarity: number;
+      }[]) {
+        if (byId.has(m.id)) continue;
+        const doc = docById.get(m.document_id);
+        byId.set(m.id, {
+          id: m.id,
+          documentId: m.document_id,
+          title: (doc?.title as string) ?? "Untitled document",
+          page: m.page_hint ?? 1,
+          content: m.content,
+          similarity: m.similarity,
+        });
+      }
+    }
+
+    // Stage 2 — rank and cap the evidence window.
+    const passages = [...byId.values()].sort((a, b) => b.similarity - a.similarity).slice(0, 18);
+    if (passages.length === 0) {
+      return { agent: data.agent, retrieved: 0, inserted: 0, note: "No passages retrieved." };
+    }
+
+    const corpusManifest = (docs ?? [])
+      .map((d) => `- ${d.title} · ${d.ministry} · ${d.doc_type}${d.doc_year ? ` · ${d.doc_year}` : ""}`)
+      .join("\n");
+
+    const evidence = passages
+      .map(
+        (p, i) =>
+          `[P${i + 1}] ${p.title} · page ${p.page} · relevance ${p.similarity.toFixed(3)}\n${p.content}`,
+      )
+      .join("\n\n");
+
+    const instructions = [
+      `You are the ${spec.name} inside PETA-AI, a national planning coherence analyser for Bappenas.`,
+      `Mandate: ${spec.mandate}`,
+      `Mechanism you implement: ${spec.mechanism}`,
+      "Rules that are not negotiable:",
+      "1. Every finding must be grounded in one of the numbered passages. Set passage_number to that passage and quote a verbatim span from it.",
+      "2. Never invent programs, ministries, figures, or documents that are absent from the passages.",
+      "3. If the retrieved evidence does not support a finding for your mandate, return an empty findings array and explain why in no_findings_reason. An empty result is a correct result.",
+      "4. confidence is 0-1 and must reflect evidential strength: below 0.6 when the passage is suggestive rather than explicit.",
+      "5. severity: critical = a national target is unreachable as written; high = material delivery risk; medium = coordination or reporting defect.",
+      "6. Recommend an analyst action. You have no authority to execute anything.",
+      "Return at most 4 findings, the strongest ones only.",
+    ].join("\n");
+
+    const input = [
+      `Temporal slice: ${run.slice_label}${run.year_from ? ` (${run.year_from}-${run.year_to})` : ""}`,
+      `Corpus in scope:\n${corpusManifest}`,
+      `Retrieved passages:\n\n${evidence}`,
+    ].join("\n\n");
+
+    const output = await generateStructured<AgentOutput>({
+      instructions,
+      input,
+      schemaName: "agent_findings",
+      schema: FINDINGS_SCHEMA,
+    });
+
+    const rows = (output.findings ?? []).slice(0, 4).map((f) => {
+      const p = f.passage_number ? passages[f.passage_number - 1] : undefined;
+      const quote = f.quote?.trim().slice(0, 600);
+      return {
+        user_id: context.userId,
+        run_id: data.runId,
+        agent: data.agent,
+        title: f.title.slice(0, 300),
+        detail: f.detail,
+        severity: ["critical", "high", "medium"].includes(f.severity) ? f.severity : "medium",
+        confidence: Math.min(1, Math.max(0, Number(f.confidence) || 0.5)),
+        programs: (f.programs ?? []).slice(0, 8),
+        ministries: (f.ministries ?? []).slice(0, 8),
+        citation: p ? `${p.title} · page ${p.page}${quote ? ` — "${quote}"` : ""}` : quote || null,
+        source_document_id: p?.documentId ?? null,
+        recommended_action: f.recommended_action,
+      };
+    });
+
+    if (rows.length) {
+      const { error } = await context.supabase.from("run_findings").insert(rows);
+      if (error) throw new Error(error.message);
+    }
+
+    return {
+      agent: data.agent,
+      retrieved: passages.length,
+      inserted: rows.length,
+      note: rows.length ? null : (output.no_findings_reason ?? "No findings for this mandate."),
+    };
+  });
+
+const SUMMARY_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  required: ["executive_summary"],
+  properties: { executive_summary: { type: "string" } },
+};
+
+export const finalizeRun = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ runId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: findings, error } = await context.supabase
+      .from("run_findings")
+      .select("id, agent, title, detail, severity, confidence, programs")
+      .eq("run_id", data.runId);
+    if (error) throw new Error(error.message);
+
+    const list = findings ?? [];
+
+    // Stigmergic reinforcement: a finding whose programs are independently
+    // touched by other agents in the same run carries more weight.
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    for (const f of list) {
+      const own = new Set((f.programs as string[]).map(norm).filter(Boolean));
+      const agents = new Set<string>([f.agent as string]);
+      for (const other of list) {
+        if (other.id === f.id) continue;
+        const shared = (other.programs as string[]).map(norm).some((p) => p && own.has(p));
+        if (shared) agents.add(other.agent as string);
+      }
+      const corroboration = agents.size;
+      const boosted = Math.min(0.97, Number(f.confidence) + (corroboration - 1) * 0.04);
+      await context.supabase
+        .from("run_findings")
+        .update({ corroboration, confidence: boosted })
+        .eq("id", f.id);
+    }
+
+    let summary: string | null = null;
+    if (list.length) {
+      const { generateStructured } = await import("./ai-gateway.server");
+      const digest = list
+        .map((f) => `- [${f.severity}] ${f.title} (${f.agent}) :: ${f.detail}`)
+        .join("\n");
+      const out = await generateStructured<{ executive_summary: string }>({
+        instructions:
+          "You write the analyst-facing executive summary for a PETA-AI coherence run. Two short paragraphs, plain prose, no bullet points, no invented facts beyond the findings given. Name the sharpest structural risk first and say what the analyst should verify. Decision authority stays with the analyst.",
+        input: `Findings from this run:\n${digest}`,
+        schemaName: "run_summary",
+        schema: SUMMARY_SCHEMA,
+      });
+      summary = out.executive_summary;
+    }
+
+    const { error: upErr } = await context.supabase
+      .from("analysis_runs")
+      .update({
+        status: "complete",
+        completed_at: new Date().toISOString(),
+        executive_summary: summary,
+      })
+      .eq("id", data.runId);
+    if (upErr) throw new Error(upErr.message);
+
+    return { findings: list.length, summary };
+  });
