@@ -123,6 +123,7 @@ const navLinks = [
   { to: "/market", label: "Market" },
   { to: "/roadmap", label: "Roadmap" },
   { to: "/demo", label: "Demo" },
+  { to: "/workspace", label: "Workspace" },
 ] as const;
 
 function SiteHeader() {
