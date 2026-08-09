@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { agentName } from "@/lib/peta-agents";
 import { Chip, ConfidenceBar, SeverityBadge } from "@/components/peta/primitives";
+import { CitationInspector, VerificationBadge } from "@/components/peta/citation";
+import type { Verification } from "@/lib/citation-verify";
 import type { Severity } from "@/lib/peta-data";
 
 export const Route = createFileRoute("/workspace/runs/$runId")({
@@ -38,7 +40,13 @@ interface Finding {
   ministries: string[];
   citation: string | null;
   recommended_action: string | null;
+  verification: string | null;
+  match_score: number | null;
 }
+
+const verificationOf = (f: Finding): Verification =>
+  f.verification === "verified" || f.verification === "partial" ? f.verification : "unverified";
+
 
 interface Run {
   id: string;
@@ -204,14 +212,18 @@ function RunReport() {
                           </dd>
                         </div>
                       ) : null}
-                      {f.citation ? (
-                        <div className="sm:col-span-2">
-                          <dt className="label-mono">Source passage</dt>
-                          <dd className="mt-2 rounded-md border border-border bg-surface-2 px-4 py-3 font-mono text-xs leading-relaxed text-muted-foreground">
-                            {f.citation}
-                          </dd>
-                        </div>
-                      ) : null}
+                      <div className="sm:col-span-2">
+                        <dt className="label-mono">Source passage · citation verification</dt>
+                        <dd className="mt-2">
+                          <CitationInspector
+                            findingId={f.id}
+                            citation={f.citation}
+                            verification={verificationOf(f)}
+                            matchScore={Number(f.match_score ?? 0)}
+                          />
+                        </dd>
+                      </div>
+
                       {f.recommended_action ? (
                         <div className="sm:col-span-2">
                           <dt className="label-mono">
