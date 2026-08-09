@@ -50,7 +50,9 @@ function RunConsole() {
   const navigate = useNavigate();
   const [docs, setDocs] = useState<DocOption[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
+  // Stigmergic Tracer is the swarm's coordination layer — on by default.
   const [selectedAgents, setSelectedAgents] = useState<AgentId[]>([
+    "stigmergic_tracer",
     "contradiction_detector",
   ]);
   const [epochId, setEpochId] = useState(EPOCHS[0]!.id);
@@ -168,12 +170,13 @@ function RunConsole() {
             <button
               type="button"
               onClick={() =>
-                setSelectedAgents(fullSwarm ? ["contradiction_detector"] : AGENT_SPECS.map((a) => a.id))
+                setSelectedAgents(fullSwarm ? ["stigmergic_tracer"] : AGENT_SPECS.map((a) => a.id))
               }
               className="rounded-md border border-border px-3 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
             >
-              {fullSwarm ? "narrow to one agent" : "select all six agents"}
+              {fullSwarm ? "narrow to the stigmergic tracer" : "select all six agents"}
             </button>
+
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
