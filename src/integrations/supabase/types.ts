@@ -163,14 +163,19 @@ export type Database = {
           created_at: string
           detail: string
           id: string
+          match_score: number
           ministries: string[]
+          page_hint: number | null
           programs: string[]
+          quote: string | null
           recommended_action: string | null
           run_id: string
           severity: string
+          source_chunk_id: string | null
           source_document_id: string | null
           title: string
           user_id: string
+          verification: string
         }
         Insert: {
           agent: string
@@ -180,14 +185,19 @@ export type Database = {
           created_at?: string
           detail: string
           id?: string
+          match_score?: number
           ministries?: string[]
+          page_hint?: number | null
           programs?: string[]
+          quote?: string | null
           recommended_action?: string | null
           run_id: string
           severity?: string
+          source_chunk_id?: string | null
           source_document_id?: string | null
           title: string
           user_id?: string
+          verification?: string
         }
         Update: {
           agent?: string
@@ -197,14 +207,19 @@ export type Database = {
           created_at?: string
           detail?: string
           id?: string
+          match_score?: number
           ministries?: string[]
+          page_hint?: number | null
           programs?: string[]
+          quote?: string | null
           recommended_action?: string | null
           run_id?: string
           severity?: string
+          source_chunk_id?: string | null
           source_document_id?: string | null
           title?: string
           user_id?: string
+          verification?: string
         }
         Relationships: [
           {
@@ -212,6 +227,13 @@ export type Database = {
             columns: ["run_id"]
             isOneToOne: false
             referencedRelation: "analysis_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "run_findings_source_chunk_id_fkey"
+            columns: ["source_chunk_id"]
+            isOneToOne: false
+            referencedRelation: "doc_chunks"
             referencedColumns: ["id"]
           },
           {
