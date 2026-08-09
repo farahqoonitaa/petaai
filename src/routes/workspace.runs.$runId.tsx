@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { agentName } from "@/lib/peta-agents";
 import { Chip, ConfidenceBar, SeverityBadge } from "@/components/peta/primitives";
+import { CitationInspector, VerificationBadge } from "@/components/peta/citation";
+import type { Verification } from "@/lib/citation-verify";
 import type { Severity } from "@/lib/peta-data";
 
 export const Route = createFileRoute("/workspace/runs/$runId")({
@@ -38,7 +40,13 @@ interface Finding {
   ministries: string[];
   citation: string | null;
   recommended_action: string | null;
+  verification: string | null;
+  match_score: number | null;
 }
+
+const verificationOf = (f: Finding): Verification =>
+  f.verification === "verified" || f.verification === "partial" ? f.verification : "unverified";
+
 
 interface Run {
   id: string;
@@ -91,6 +99,12 @@ function RunReport() {
     const order: Severity[] = ["critical", "high", "medium"];
     return order.map((s) => ({ s, n: findings.filter((f) => f.severity === s).length }));
   }, [findings]);
+
+  const verifiedCount = useMemo(
+    () => findings.filter((f) => verificationOf(f) === "verified").length,
+    [findings],
+  );
+
 
   if (loading) return <p className="text-sm text-muted-foreground">Loading report…</p>;
   if (!run) return <p className="text-sm text-muted-foreground">This run no longer exists.</p>;
@@ -151,6 +165,22 @@ function RunReport() {
         ))}
       </div>
 
+      {findings.length ? (
+        <div className="mt-4 rounded-lg border border-border bg-surface-2 px-4 py-3">
+          <p className="label-mono">citation verification</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            {verifiedCount} of {findings.length} finding{findings.length === 1 ? "" : "s"} quote a
+            span found verbatim in an indexed passage.
+            {findings.length - verifiedCount > 0
+              ? ` ${findings.length - verifiedCount} low-confidence match${
+                  findings.length - verifiedCount === 1 ? " is" : "es are"
+                } flagged below and capped in confidence — open the excerpt to check the wording against your own document.`
+              : " Open any excerpt to read the source span with the quote highlighted."}
+          </p>
+        </div>
+      ) : null}
+
+
       {findings.length === 0 ? (
         <p className="mt-8 max-w-2xl text-sm leading-relaxed text-muted-foreground">
           This run produced no findings. That is a legitimate outcome: each agent only reports what it
@@ -169,11 +199,16 @@ function RunReport() {
                 >
                   <div className="flex flex-wrap items-center gap-3">
                     <SeverityBadge severity={f.severity} />
+                    <VerificationBadge
+                      verification={verificationOf(f)}
+                      matchScore={Number(f.match_score ?? 0)}
+                    />
                     <Chip>{agentName(f.agent)}</Chip>
                     <span className="font-mono text-[11px] text-muted-foreground">
                       {f.corroboration} agent{f.corroboration === 1 ? "" : "s"} touching these programs
                     </span>
                   </div>
+
                   <h3 className="mt-3 text-base font-semibold">{f.title}</h3>
                   <div className="mt-4 max-w-xs">
                     <ConfidenceBar value={Number(f.confidence)} />
@@ -204,14 +239,18 @@ function RunReport() {
                           </dd>
                         </div>
                       ) : null}
-                      {f.citation ? (
-                        <div className="sm:col-span-2">
-                          <dt className="label-mono">Source passage</dt>
-                          <dd className="mt-2 rounded-md border border-border bg-surface-2 px-4 py-3 font-mono text-xs leading-relaxed text-muted-foreground">
-                            {f.citation}
-                          </dd>
-                        </div>
-                      ) : null}
+                      <div className="sm:col-span-2">
+                        <dt className="label-mono">Source passage · citation verification</dt>
+                        <dd className="mt-2">
+                          <CitationInspector
+                            findingId={f.id}
+                            citation={f.citation}
+                            verification={verificationOf(f)}
+                            matchScore={Number(f.match_score ?? 0)}
+                          />
+                        </dd>
+                      </div>
+
                       {f.recommended_action ? (
                         <div className="sm:col-span-2">
                           <dt className="label-mono">

@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { AGENT_BY_ID, type AgentId } from "./peta-agents";
+import { verifyQuote } from "./citation-verify";
 
 const AGENT_IDS = [
   "stigmergic_tracer",
@@ -252,7 +253,16 @@ export const runAgentPass = createServerFn({ method: "POST" })
 
     const rows = (output.findings ?? []).slice(0, 4).map((f) => {
       const p = f.passage_number ? passages[f.passage_number - 1] : undefined;
-      const quote = f.quote?.trim().slice(0, 600);
+      const quote = f.quote?.trim().slice(0, 600) ?? "";
+      const { verification, matchScore } = verifyQuote(quote, p?.content);
+      // An unverifiable citation cannot be allowed to read as a confident finding.
+      const rawConfidence = Math.min(1, Math.max(0, Number(f.confidence) || 0.5));
+      const confidence =
+        verification === "verified"
+          ? rawConfidence
+          : verification === "partial"
+            ? Math.min(rawConfidence, 0.55)
+            : Math.min(rawConfidence, 0.35);
       return {
         user_id: context.userId,
         run_id: data.runId,
@@ -260,11 +270,16 @@ export const runAgentPass = createServerFn({ method: "POST" })
         title: f.title.slice(0, 300),
         detail: f.detail,
         severity: ["critical", "high", "medium"].includes(f.severity) ? f.severity : "medium",
-        confidence: Math.min(1, Math.max(0, Number(f.confidence) || 0.5)),
+        confidence,
         programs: (f.programs ?? []).slice(0, 8),
         ministries: (f.ministries ?? []).slice(0, 8),
         citation: p ? `${p.title} · page ${p.page}${quote ? ` — "${quote}"` : ""}` : quote || null,
         source_document_id: p?.documentId ?? null,
+        source_chunk_id: p?.id ?? null,
+        quote: quote || null,
+        page_hint: p?.page ?? null,
+        match_score: matchScore,
+        verification,
         recommended_action: f.recommended_action,
       };
     });
@@ -278,9 +293,59 @@ export const runAgentPass = createServerFn({ method: "POST" })
       agent: data.agent,
       retrieved: passages.length,
       inserted: rows.length,
+      unverified: rows.filter((r) => r.verification !== "verified").length,
       note: rows.length ? null : (output.no_findings_reason ?? "No findings for this mandate."),
     };
   });
+
+/** Full indexed excerpt behind one finding, for citation-level inspection. */
+export const getFindingEvidence = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ findingId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: finding, error } = await context.supabase
+      .from("run_findings")
+      .select("id, quote, page_hint, match_score, verification, source_chunk_id, source_document_id")
+      .eq("id", data.findingId)
+      .single();
+    if (error) throw new Error(error.message);
+
+    let excerpt: string | null = null;
+    let chunkIndex: number | null = null;
+    if (finding.source_chunk_id) {
+      const { data: chunk } = await context.supabase
+        .from("doc_chunks")
+        .select("content, chunk_index")
+        .eq("id", finding.source_chunk_id as string)
+        .maybeSingle();
+      excerpt = (chunk?.content as string) ?? null;
+      chunkIndex = (chunk?.chunk_index as number) ?? null;
+    }
+
+    let documentTitle: string | null = null;
+    let ministry: string | null = null;
+    if (finding.source_document_id) {
+      const { data: doc } = await context.supabase
+        .from("corpus_documents")
+        .select("title, ministry")
+        .eq("id", finding.source_document_id as string)
+        .maybeSingle();
+      documentTitle = (doc?.title as string) ?? null;
+      ministry = (doc?.ministry as string) ?? null;
+    }
+
+    return {
+      quote: (finding.quote as string | null) ?? null,
+      page: (finding.page_hint as number | null) ?? null,
+      matchScore: Number(finding.match_score ?? 0),
+      verification: (finding.verification as string) ?? "unverified",
+      excerpt,
+      chunkIndex,
+      documentTitle,
+      ministry,
+    };
+  });
+
 
 const SUMMARY_SCHEMA: Record<string, unknown> = {
   type: "object",
