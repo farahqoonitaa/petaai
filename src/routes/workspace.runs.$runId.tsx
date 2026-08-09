@@ -100,6 +100,12 @@ function RunReport() {
     return order.map((s) => ({ s, n: findings.filter((f) => f.severity === s).length }));
   }, [findings]);
 
+  const verifiedCount = useMemo(
+    () => findings.filter((f) => verificationOf(f) === "verified").length,
+    [findings],
+  );
+
+
   if (loading) return <p className="text-sm text-muted-foreground">Loading report…</p>;
   if (!run) return <p className="text-sm text-muted-foreground">This run no longer exists.</p>;
 
@@ -159,6 +165,22 @@ function RunReport() {
         ))}
       </div>
 
+      {findings.length ? (
+        <div className="mt-4 rounded-lg border border-border bg-surface-2 px-4 py-3">
+          <p className="label-mono">citation verification</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            {verifiedCount} of {findings.length} finding{findings.length === 1 ? "" : "s"} quote a
+            span found verbatim in an indexed passage.
+            {findings.length - verifiedCount > 0
+              ? ` ${findings.length - verifiedCount} low-confidence match${
+                  findings.length - verifiedCount === 1 ? " is" : "es are"
+                } flagged below and capped in confidence — open the excerpt to check the wording against your own document.`
+              : " Open any excerpt to read the source span with the quote highlighted."}
+          </p>
+        </div>
+      ) : null}
+
+
       {findings.length === 0 ? (
         <p className="mt-8 max-w-2xl text-sm leading-relaxed text-muted-foreground">
           This run produced no findings. That is a legitimate outcome: each agent only reports what it
@@ -177,11 +199,16 @@ function RunReport() {
                 >
                   <div className="flex flex-wrap items-center gap-3">
                     <SeverityBadge severity={f.severity} />
+                    <VerificationBadge
+                      verification={verificationOf(f)}
+                      matchScore={Number(f.match_score ?? 0)}
+                    />
                     <Chip>{agentName(f.agent)}</Chip>
                     <span className="font-mono text-[11px] text-muted-foreground">
                       {f.corroboration} agent{f.corroboration === 1 ? "" : "s"} touching these programs
                     </span>
                   </div>
+
                   <h3 className="mt-3 text-base font-semibold">{f.title}</h3>
                   <div className="mt-4 max-w-xs">
                     <ConfidenceBar value={Number(f.confidence)} />
