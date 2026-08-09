@@ -50,7 +50,9 @@ function RunConsole() {
   const navigate = useNavigate();
   const [docs, setDocs] = useState<DocOption[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
+  // Stigmergic Tracer is the swarm's coordination layer — on by default.
   const [selectedAgents, setSelectedAgents] = useState<AgentId[]>([
+    "stigmergic_tracer",
     "contradiction_detector",
   ]);
   const [epochId, setEpochId] = useState(EPOCHS[0]!.id);
