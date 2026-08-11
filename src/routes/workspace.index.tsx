@@ -111,48 +111,53 @@ function RunConsole() {
       setRunId(started.runId);
       setCoverage(started.coverageWarning);
 
-      for (const agent of selectedAgents) {
-        setPasses((prev) =>
-          prev.map((p) => (p.agent === agent ? { ...p, state: "retrieving" } : p)),
-        );
-        try {
-          const result = await runAgentPass({ data: { runId: started.runId, agent } });
-          setPasses((prev) =>
-            prev.map((p) =>
-              p.agent === agent
-                ? {
-                    ...p,
-                    state: result.inserted > 0 ? "done" : "empty",
-                    retrieved: result.retrieved,
-                    inserted: result.inserted,
-                    note: result.note,
-                  }
-                : p,
-            ),
-          );
-        } catch (e) {
-          setPasses((prev) =>
-            prev.map((p) =>
-              p.agent === agent
-                ? {
-                    ...p,
-                    state: "failed",
-                    note: e instanceof Error ? e.message : "Pass failed.",
-                  }
-                : p,
-            ),
-          );
-        }
-      }
+      // Agents run concurrently — the swarm is parallel by design, and trace
+      // sequencing is kept unique by the atomic counter in the database.
+      setPasses((prev) => prev.map((p) => ({ ...p, state: "retrieving" })));
+      await Promise.all(
+        selectedAgents.map(async (agent) => {
+          try {
+            const result = await runAgentPass({ data: { runId: started.runId, agent } });
+            setPasses((prev) =>
+              prev.map((p) =>
+                p.agent === agent
+                  ? {
+                      ...p,
+                      state: result.inserted > 0 ? "done" : "empty",
+                      retrieved: result.retrieved,
+                      inserted: result.inserted,
+                      note: result.note,
+                    }
+                  : p,
+              ),
+            );
+          } catch (e) {
+            if (isCreditError(e)) setError(friendlyAiError(e));
+            setPasses((prev) =>
+              prev.map((p) =>
+                p.agent === agent
+                  ? { ...p, state: "failed", note: friendlyAiError(e, "Pass failed.") }
+                  : p,
+              ),
+            );
+          }
+        }),
+      );
 
-      await finalizeRun({ data: { runId: started.runId } });
+      try {
+        await finalizeRun({ data: { runId: started.runId } });
+      } catch (e) {
+        // A missing summary must not hide the grounded findings already stored.
+        setError(friendlyAiError(e));
+      }
       void navigate({ to: "/workspace/runs/$runId", params: { runId: started.runId } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Run failed to start.");
+      setError(friendlyAiError(e, "Run failed to start."));
     } finally {
       setRunning(false);
     }
   }
+
 
   const canRun = !running && selectedAgents.length > 0 && selectedDocs.length > 0;
 
