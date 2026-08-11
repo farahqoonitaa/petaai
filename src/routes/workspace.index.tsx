@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AGENT_SPECS, EPOCHS, type AgentId } from "@/lib/peta-agents";
 import { finalizeRun, runAgentPass, startRun } from "@/lib/analysis.functions";
+import { friendlyAiError, isCreditError } from "@/lib/gateway-error";
 import { Chip } from "@/components/peta/primitives";
 
 export const Route = createFileRoute("/workspace/")({
