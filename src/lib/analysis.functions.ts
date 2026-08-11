@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { AGENT_BY_ID, type AgentId } from "./peta-agents";
 import { verifyQuote } from "./citation-verify";
+import { attributeMonetary, buildCascade, dedupeMinistries } from "./grounding";
 
 const AGENT_IDS = [
   "stigmergic_tracer",
