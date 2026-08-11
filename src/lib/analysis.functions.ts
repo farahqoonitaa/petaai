@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { AGENT_BY_ID, type AgentId } from "./peta-agents";
 import { verifyQuote } from "./citation-verify";
+import { attributeMonetary, buildCascade, dedupeMinistries } from "./grounding";
 
 const AGENT_IDS = [
   "stigmergic_tracer",
@@ -161,6 +162,17 @@ export const runAgentPass = createServerFn({ method: "POST" })
     const spec = AGENT_BY_ID.get(data.agent as AgentId);
     if (!spec) throw new Error("Unknown agent");
 
+    const trace = async (phase: string, message: string) => {
+      // Atomic per-run counter in the database: parallel agents still get a
+      // unique, contiguous step number.
+      await context.supabase.rpc("emit_trace", {
+        _run_id: data.runId,
+        _agent: data.agent,
+        _phase: phase,
+        _message: message,
+      });
+    };
+
     const { data: run, error: runErr } = await context.supabase
       .from("analysis_runs")
       .select("id, document_ids, slice_label, year_from, year_to")
@@ -178,6 +190,7 @@ export const runAgentPass = createServerFn({ method: "POST" })
     const { embedTexts, generateStructured } = await import("./ai-gateway.server");
 
     // Stage 1 — dense retrieval across this agent's probes.
+    await trace("retrieval", `Embedding ${spec.probes.length} retrieval probes.`);
     const probeVectors = await embedTexts(spec.probes);
     const byId = new Map<string, Passage>();
     for (const vec of probeVectors) {
@@ -210,8 +223,19 @@ export const runAgentPass = createServerFn({ method: "POST" })
     // Stage 2 — rank and cap the evidence window.
     const passages = [...byId.values()].sort((a, b) => b.similarity - a.similarity).slice(0, 18);
     if (passages.length === 0) {
-      return { agent: data.agent, retrieved: 0, inserted: 0, note: "No passages retrieved." };
+      await trace("empty", "No passages retrieved for this mandate.");
+      return {
+        agent: data.agent,
+        retrieved: 0,
+        inserted: 0,
+        dropped: 0,
+        note: "No passages retrieved.",
+      };
     }
+    await trace(
+      "retrieval",
+      `${passages.length} passages ranked, top relevance ${passages[0]!.similarity.toFixed(3)}.`,
+    );
 
     const corpusManifest = (docs ?? [])
       .map((d) => `- ${d.title} · ${d.ministry} · ${d.doc_type}${d.doc_year ? ` · ${d.doc_year}` : ""}`)
@@ -244,6 +268,7 @@ export const runAgentPass = createServerFn({ method: "POST" })
       `Retrieved passages:\n\n${evidence}`,
     ].join("\n\n");
 
+    await trace("reasoning", "Reasoning over the retrieved evidence window.");
     const output = await generateStructured<AgentOutput>({
       instructions,
       input,
@@ -251,37 +276,58 @@ export const runAgentPass = createServerFn({ method: "POST" })
       schema: FINDINGS_SCHEMA,
     });
 
-    const rows = (output.findings ?? []).slice(0, 4).map((f) => {
+    const candidates = (output.findings ?? []).slice(0, 4);
+    const dropped: string[] = [];
+
+    const rows = candidates.flatMap((f) => {
       const p = f.passage_number ? passages[f.passage_number - 1] : undefined;
       const quote = f.quote?.trim().slice(0, 600) ?? "";
       const { verification, matchScore } = verifyQuote(quote, p?.content);
-      // An unverifiable citation cannot be allowed to read as a confident finding.
+
+      // Hard grounding gate: an ungrounded claim never reaches the database.
+      if (!p || verification === "unverified") {
+        dropped.push(f.title.slice(0, 120));
+        return [];
+      }
+
       const rawConfidence = Math.min(1, Math.max(0, Number(f.confidence) || 0.5));
-      const confidence =
-        verification === "verified"
-          ? rawConfidence
-          : verification === "partial"
-            ? Math.min(rawConfidence, 0.55)
-            : Math.min(rawConfidence, 0.35);
-      return {
-        user_id: context.userId,
-        run_id: data.runId,
-        agent: data.agent,
-        title: f.title.slice(0, 300),
-        detail: f.detail,
-        severity: ["critical", "high", "medium"].includes(f.severity) ? f.severity : "medium",
-        confidence,
-        programs: (f.programs ?? []).slice(0, 8),
-        ministries: (f.ministries ?? []).slice(0, 8),
-        citation: p ? `${p.title} · page ${p.page}${quote ? ` — "${quote}"` : ""}` : quote || null,
-        source_document_id: p?.documentId ?? null,
-        source_chunk_id: p?.id ?? null,
-        quote: quote || null,
-        page_hint: p?.page ?? null,
-        match_score: matchScore,
-        verification,
-        recommended_action: f.recommended_action,
-      };
+      const confidence = verification === "verified" ? rawConfidence : Math.min(rawConfidence, 0.55);
+
+      const programs = (f.programs ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 8);
+      const ministries = dedupeMinistries((f.ministries ?? []).slice(0, 8));
+
+      // Deterministic monetary attribution: nearest-program rule with currency
+      // validation, read from the passage itself — never from the model.
+      let money: ReturnType<typeof attributeMonetary> = null;
+      for (const program of programs) {
+        const hit = attributeMonetary(p.content, program, { otherPrograms: programs });
+        if (hit && (!money || hit.distance < money.distance)) money = hit;
+      }
+
+      return [
+        {
+          user_id: context.userId,
+          run_id: data.runId,
+          agent: data.agent,
+          title: f.title.slice(0, 300),
+          detail: f.detail,
+          severity: ["critical", "high", "medium"].includes(f.severity) ? f.severity : "medium",
+          confidence,
+          programs,
+          ministries,
+          citation: `${p.title} · page ${p.page}${quote ? ` — "${quote}"` : ""}`,
+          source_document_id: p.documentId,
+          source_chunk_id: p.id,
+          quote: quote || null,
+          page_hint: p.page,
+          match_score: matchScore,
+          verification,
+          monetary_amount: money?.amount ?? null,
+          monetary_currency: money ? money.currency : null,
+          monetary_basis: money?.basis ?? null,
+          recommended_action: f.recommended_action,
+        },
+      ];
     });
 
     if (rows.length) {
@@ -289,14 +335,31 @@ export const runAgentPass = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
     }
 
+    if (dropped.length)
+      await trace(
+        "dropped",
+        `${dropped.length} ungrounded claim(s) discarded before storage: ${dropped.join("; ")}`,
+      );
+    await trace(
+      rows.length ? "deposited" : "empty",
+      rows.length
+        ? `${rows.length} grounded finding(s) deposited into the coherence graph.`
+        : (output.no_findings_reason ?? "No findings for this mandate."),
+    );
+
     return {
       agent: data.agent,
       retrieved: passages.length,
       inserted: rows.length,
-      unverified: rows.filter((r) => r.verification !== "verified").length,
-      note: rows.length ? null : (output.no_findings_reason ?? "No findings for this mandate."),
+      dropped: dropped.length,
+      note: rows.length
+        ? dropped.length
+          ? `${dropped.length} ungrounded claim(s) discarded.`
+          : null
+        : (output.no_findings_reason ?? "No findings for this mandate."),
     };
   });
+
 
 /** Full indexed excerpt behind one finding, for citation-level inspection. */
 export const getFindingEvidence = createServerFn({ method: "POST" })
@@ -412,4 +475,67 @@ export const finalizeRun = createServerFn({ method: "POST" })
     if (upErr) throw new Error(upErr.message);
 
     return { findings: list.length, summary };
+  });
+
+/**
+ * Non-LLM run analytics: the atomic trace log, the noisy-OR failure cascade and
+ * monetary exposure. These stay available even when the AI gateway is out of
+ * credit, so a run report degrades gracefully instead of going blank.
+ */
+export const getRunAnalytics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ runId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const [{ data: findings, error }, { data: traces }] = await Promise.all([
+      context.supabase
+        .from("run_findings")
+        .select(
+          "id, agent, title, severity, confidence, corroboration, verification, programs, ministries, monetary_amount, monetary_currency, monetary_basis",
+        )
+        .eq("run_id", data.runId),
+      context.supabase
+        .from("run_traces")
+        .select("seq, agent, phase, message, created_at")
+        .eq("run_id", data.runId)
+        .order("seq", { ascending: true }),
+    ]);
+    if (error) throw new Error(error.message);
+
+    const list = findings ?? [];
+    const cascade = buildCascade(
+      list.map((f) => ({
+        programs: (f.programs as string[]) ?? [],
+        severity: f.severity as "critical" | "high" | "medium",
+        confidence: Number(f.confidence ?? 0),
+        corroboration: Number(f.corroboration ?? 1),
+        verification: (f.verification as string) ?? "unverified",
+      })),
+    );
+
+    const exposure = list
+      .filter((f) => f.monetary_amount != null)
+      .map((f) => ({
+        findingId: f.id as string,
+        title: f.title as string,
+        agent: f.agent as string,
+        program: ((f.programs as string[]) ?? [])[0] ?? null,
+        amount: Number(f.monetary_amount),
+        currency: (f.monetary_currency as string) ?? "IDR",
+        basis: (f.monetary_basis as string) ?? null,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
+    return {
+      cascade,
+      exposure,
+      exposureTotal: exposure.reduce((sum, e) => sum + e.amount, 0),
+      ministries: dedupeMinistries(list.flatMap((f) => (f.ministries as string[]) ?? [])),
+      traces: (traces ?? []).map((t) => ({
+        seq: Number(t.seq),
+        agent: t.agent as string,
+        phase: t.phase as string,
+        message: t.message as string,
+        at: t.created_at as string,
+      })),
+    };
   });
