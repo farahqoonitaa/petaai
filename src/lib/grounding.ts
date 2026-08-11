@@ -144,19 +144,25 @@ function programMentions(text: string, program: string): number[] {
  * Nearest-program monetary attribution with currency validation.
  *
  * A figure only counts as this program's money when (a) currency evidence sits
- * inside the match or in a tight prefix, (b) no non-money unit follows it, and
- * (c) the program itself is named nearby. Anything else returns null rather
+ * inside the match or in a tight prefix, (b) no non-money unit follows it,
+ * (c) the program itself is named nearby, and (d) no *other* program in the
+ * finding is named closer to that figure. Anything else returns null rather
  * than borrowing a neighbouring program's budget.
  */
 export function attributeMonetary(
   text: string | null | undefined,
   program: string | null | undefined,
-  maxDistance = 320,
+  options: { otherPrograms?: string[]; maxDistance?: number } = {},
 ): MonetaryHit | null {
+  const { otherPrograms = [], maxDistance = 200 } = options;
   const body = text ?? "";
   if (!body || !program) return null;
   const mentions = programMentions(body, program);
   if (mentions.length === 0) return null;
+
+  const rivals = otherPrograms
+    .filter((p) => p && normalizeName(p) !== normalizeName(program))
+    .flatMap((p) => programMentions(body, p));
 
   const re = /(?:rp\.?\s*|idr\s*)?(\d[\d.,]*)\s*(triliun|trilyun|trillion|miliar|milyar|billion|bn|juta|million|mn|ribu|thousand|k)?/gi;
   let best: MonetaryHit | null = null;
@@ -186,12 +192,20 @@ export function attributeMonetary(
     const distance = Math.min(...mentions.map((i) => Math.abs(i - start)));
     if (distance > maxDistance) continue;
 
+    // Nearest-program rule: a joint finding must not hand this figure to the
+    // program that merely happens to be mentioned in the same passage.
+    const rivalDistance = rivals.length
+      ? Math.min(...rivals.map((i) => Math.abs(i - start)))
+      : Number.POSITIVE_INFINITY;
+    if (rivalDistance <= distance) continue;
+
     const basis = body.slice(start, Math.min(body.length, end + (CURRENCY_SUFFIX.test(after) ? 8 : 0))).trim();
     if (!best || distance < best.distance) best = { amount, currency: "IDR", basis, distance };
   }
 
   return best;
 }
+
 
 export function formatRupiah(amount: number): string {
   if (amount >= 1e12) return `Rp ${+(amount / 1e12).toFixed(2)} triliun`;
