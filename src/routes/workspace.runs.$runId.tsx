@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { agentName } from "@/lib/peta-agents";
 import { Chip, ConfidenceBar, SeverityBadge } from "@/components/peta/primitives";
 import { CitationInspector, VerificationBadge } from "@/components/peta/citation";
+import { RunAnalytics } from "@/components/peta/cascade";
+import { formatRupiah } from "@/lib/grounding";
 import type { Verification } from "@/lib/citation-verify";
 import type { Severity } from "@/lib/peta-data";
 
@@ -42,6 +44,9 @@ interface Finding {
   recommended_action: string | null;
   verification: string | null;
   match_score: number | null;
+  monetary_amount: number | null;
+  monetary_currency: string | null;
+  monetary_basis: string | null;
 }
 
 const verificationOf = (f: Finding): Verification =>
@@ -251,6 +256,22 @@ function RunReport() {
                         </dd>
                       </div>
 
+                      {f.monetary_amount != null ? (
+                        <div className="sm:col-span-2">
+                          <dt className="label-mono">
+                            Attributed budget exposure (nearest-program rule)
+                          </dt>
+                          <dd className="mt-2 text-sm leading-relaxed text-foreground">
+                            {formatRupiah(Number(f.monetary_amount))}
+                            {f.monetary_basis ? (
+                              <span className="ml-2 font-mono text-[11px] text-muted-foreground">
+                                read verbatim as "{f.monetary_basis}"
+                              </span>
+                            ) : null}
+                          </dd>
+                        </div>
+                      ) : null}
+
                       {f.recommended_action ? (
                         <div className="sm:col-span-2">
                           <dt className="label-mono">
@@ -269,6 +290,8 @@ function RunReport() {
           })}
         </div>
       )}
+
+      <RunAnalytics runId={runId} />
     </div>
   );
 }
