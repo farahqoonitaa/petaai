@@ -26,6 +26,7 @@ export type Database = {
           mode: string
           slice_label: string
           status: string
+          trace_cursor: number
           user_id: string
           year_from: number | null
           year_to: number | null
@@ -41,6 +42,7 @@ export type Database = {
           mode?: string
           slice_label?: string
           status?: string
+          trace_cursor?: number
           user_id?: string
           year_from?: number | null
           year_to?: number | null
@@ -56,6 +58,7 @@ export type Database = {
           mode?: string
           slice_label?: string
           status?: string
+          trace_cursor?: number
           user_id?: string
           year_from?: number | null
           year_to?: number | null
@@ -165,6 +168,9 @@ export type Database = {
           id: string
           match_score: number
           ministries: string[]
+          monetary_amount: number | null
+          monetary_basis: string | null
+          monetary_currency: string | null
           page_hint: number | null
           programs: string[]
           quote: string | null
@@ -187,6 +193,9 @@ export type Database = {
           id?: string
           match_score?: number
           ministries?: string[]
+          monetary_amount?: number | null
+          monetary_basis?: string | null
+          monetary_currency?: string | null
           page_hint?: number | null
           programs?: string[]
           quote?: string | null
@@ -209,6 +218,9 @@ export type Database = {
           id?: string
           match_score?: number
           ministries?: string[]
+          monetary_amount?: number | null
+          monetary_basis?: string | null
+          monetary_currency?: string | null
           page_hint?: number | null
           programs?: string[]
           quote?: string | null
@@ -245,11 +257,61 @@ export type Database = {
           },
         ]
       }
+      run_traces: {
+        Row: {
+          agent: string | null
+          created_at: string
+          id: string
+          message: string
+          phase: string
+          run_id: string
+          seq: number
+          user_id: string
+        }
+        Insert: {
+          agent?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          phase: string
+          run_id: string
+          seq: number
+          user_id?: string
+        }
+        Update: {
+          agent?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          phase?: string
+          run_id?: string
+          seq?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "run_traces_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      emit_trace: {
+        Args: {
+          _agent: string
+          _message: string
+          _phase: string
+          _run_id: string
+        }
+        Returns: number
+      }
       match_chunks: {
         Args: {
           doc_ids: string[]
