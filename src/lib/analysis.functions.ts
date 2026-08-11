@@ -476,3 +476,66 @@ export const finalizeRun = createServerFn({ method: "POST" })
 
     return { findings: list.length, summary };
   });
+
+/**
+ * Non-LLM run analytics: the atomic trace log, the noisy-OR failure cascade and
+ * monetary exposure. These stay available even when the AI gateway is out of
+ * credit, so a run report degrades gracefully instead of going blank.
+ */
+export const getRunAnalytics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ runId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const [{ data: findings, error }, { data: traces }] = await Promise.all([
+      context.supabase
+        .from("run_findings")
+        .select(
+          "id, agent, title, severity, confidence, corroboration, verification, programs, ministries, monetary_amount, monetary_currency, monetary_basis",
+        )
+        .eq("run_id", data.runId),
+      context.supabase
+        .from("run_traces")
+        .select("seq, agent, phase, message, created_at")
+        .eq("run_id", data.runId)
+        .order("seq", { ascending: true }),
+    ]);
+    if (error) throw new Error(error.message);
+
+    const list = findings ?? [];
+    const cascade = buildCascade(
+      list.map((f) => ({
+        programs: (f.programs as string[]) ?? [],
+        severity: f.severity as "critical" | "high" | "medium",
+        confidence: Number(f.confidence ?? 0),
+        corroboration: Number(f.corroboration ?? 1),
+        verification: (f.verification as string) ?? "unverified",
+      })),
+    );
+
+    const exposure = list
+      .filter((f) => f.monetary_amount != null)
+      .map((f) => ({
+        findingId: f.id as string,
+        title: f.title as string,
+        agent: f.agent as string,
+        program: ((f.programs as string[]) ?? [])[0] ?? null,
+        amount: Number(f.monetary_amount),
+        currency: (f.monetary_currency as string) ?? "IDR",
+        basis: (f.monetary_basis as string) ?? null,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
+    return {
+      cascade,
+      exposure,
+      exposureTotal: exposure.reduce((sum, e) => sum + e.amount, 0),
+      ministries: dedupeMinistries(list.flatMap((f) => (f.ministries as string[]) ?? [])),
+      traces: (traces ?? []).map((t) => ({
+        seq: Number(t.seq),
+        agent: t.agent as string,
+        phase: t.phase as string,
+        message: t.message as string,
+        at: t.created_at as string,
+      })),
+    };
+  });
