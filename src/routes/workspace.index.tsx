@@ -80,6 +80,7 @@ function RunConsole() {
 
   const epoch = EPOCHS.find((e) => e.id === epochId) ?? EPOCHS[0]!;
   const fullSwarm = selectedAgents.length === AGENT_SPECS.length;
+  const tracerOn = selectedAgents.includes("stigmergic_tracer");
 
   function toggleAgent(id: AgentId) {
     setSelectedAgents((prev) =>
@@ -172,26 +173,46 @@ function RunConsole() {
               <h2 className="mt-2 text-lg font-semibold">
                 {fullSwarm ? "Full swarm analysis" : "Focused agent selection"}
               </h2>
+              <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+                {selectedAgents.length} of {AGENT_SPECS.length} agents will deposit traces
+                {tracerOn ? "" : " · tracer off, no coordination layer"}
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={() =>
-                setSelectedAgents(fullSwarm ? ["stigmergic_tracer"] : AGENT_SPECS.map((a) => a.id))
-              }
-              className="rounded-md border border-border px-3 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {fullSwarm ? "narrow to the stigmergic tracer" : "select all six agents"}
-            </button>
-
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedAgents(AGENT_SPECS.map((a) => a.id))}
+                className="rounded-md border border-border px-3 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                full swarm
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedAgents(["stigmergic_tracer"])}
+                className="rounded-md border border-border px-3 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                tracer only
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedAgents([])}
+                className="rounded-md border border-border px-3 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                clear
+              </button>
+            </div>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2" role="group" aria-label="Agents in this run">
             {AGENT_SPECS.map((a) => {
               const on = selectedAgents.includes(a.id);
               return (
                 <button
                   key={a.id}
                   type="button"
+                  role="checkbox"
+                  aria-checked={on}
+                  aria-label={`${a.name} — ${on ? "selected" : "not selected"}`}
                   onClick={() => toggleAgent(a.id)}
                   className={`rounded-lg border p-4 text-left transition-colors ${
                     on
@@ -200,7 +221,19 @@ function RunConsole() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold">{a.name}</h3>
+                    <h3 className="flex items-center gap-2 text-sm font-semibold">
+                      <span
+                        aria-hidden
+                        className={`grid h-4 w-4 shrink-0 place-items-center rounded border font-mono text-[9px] ${
+                          on
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border text-transparent"
+                        }`}
+                      >
+                        ✓
+                      </span>
+                      {a.name}
+                    </h3>
                     <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                       {a.bottlenecks}
                     </span>
@@ -213,6 +246,11 @@ function RunConsole() {
               );
             })}
           </div>
+          {selectedAgents.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Select at least one agent — an empty swarm has nothing to deposit.
+            </p>
+          ) : null}
         </section>
 
         <section className="mt-10">
