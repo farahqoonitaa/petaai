@@ -390,14 +390,20 @@ function RunConsole() {
             <p className="label-mono">step 4 · corpus in scope</p>
             <button
               type="button"
-              onClick={() =>
-                setSelectedDocs(selectedDocs.length === docs.length ? [] : docs.map((d) => d.id))
-              }
+              onClick={() => {
+                const eligible = (evaluator && !crossMinistry ? ownDocs : docs).map((d) => d.id);
+                setSelectedDocs(selectedDocs.length === eligible.length ? [] : eligible);
+              }}
               className="font-mono text-[11px] text-muted-foreground hover:text-foreground"
             >
-              {selectedDocs.length === docs.length ? "clear all" : "select all"}
+              {selectedDocs.length > 0 ? "clear all" : "select all"}
             </button>
           </div>
+          {evaluator && !crossMinistry ? (
+            <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+              locked to {evaluator} — turn on the cross-ministry exception to widen scope
+            </p>
+          ) : null}
 
           {docs.length === 0 ? (
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
@@ -409,19 +415,27 @@ function RunConsole() {
             <ul className="mt-3 space-y-2">
               {docs.map((d) => {
                 const on = selectedDocs.includes(d.id);
+                const locked = scopedOut.includes(d.id);
                 return (
                   <li key={d.id}>
                     <button
                       type="button"
+                      disabled={locked}
                       onClick={() => toggleDoc(d.id)}
                       className={`flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
-                        on ? "border-primary/50 bg-primary/10" : "border-border bg-card hover:bg-surface-2"
+                        locked
+                          ? "cursor-not-allowed border-dashed border-border bg-card opacity-45"
+                          : on
+                            ? "border-primary/50 bg-primary/10"
+                            : "border-border bg-card hover:bg-surface-2"
                       }`}
                     >
                       <span className="text-sm">{d.title}</span>
                       <span className="flex flex-wrap gap-2">
                         <Chip>{d.ministry}</Chip>
                         <Chip>{d.doc_type}</Chip>
+                        <Chip>{locked ? "out of scope" : `${d.chunk_count} passages`}</Chip>
+
                         <Chip>{d.chunk_count} passages</Chip>
                       </span>
                     </button>
