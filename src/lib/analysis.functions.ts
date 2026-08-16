@@ -21,7 +21,13 @@ const StartRun = z.object({
   sliceLabel: z.string().trim().min(1).max(120),
   yearFrom: z.number().int().min(1990).max(2060).nullable(),
   yearTo: z.number().int().min(1990).max(2060).nullable(),
+  /** Institution running the evaluation. Null = central cross-government review. */
+  evaluatorMinistry: z.string().trim().min(1).max(200).nullable().default(null),
+  evaluationMode: z.enum(["self_evaluation", "central_review"]).default("central_review"),
+  /** Exception: pull in other ministries' documents even in a self-evaluation. */
+  crossMinistry: z.boolean().default(true),
 });
+
 
 export const startRun = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -29,18 +35,45 @@ export const startRun = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: docs, error: docErr } = await context.supabase
       .from("corpus_documents")
-      .select("id, title, doc_year, status, chunk_count")
+      .select("id, title, ministry, doc_year, status, chunk_count")
       .in("id", data.documentIds);
     if (docErr) throw new Error(docErr.message);
 
-    const ready = (docs ?? []).filter((d) => d.status === "ready" && (d.chunk_count ?? 0) > 0);
-    if (ready.length === 0)
+    const indexed = (docs ?? []).filter((d) => d.status === "ready" && (d.chunk_count ?? 0) > 0);
+    if (indexed.length === 0)
       throw new Error("None of the selected documents finished indexing — nothing to analyse.");
 
     const warnings: string[] = [];
+    const sameMinistry = (d: { ministry: string | null }) =>
+      !!data.evaluatorMinistry &&
+      (d.ministry ?? "").trim().toLowerCase() === data.evaluatorMinistry.trim().toLowerCase();
+
+    // Institutional scoping: a self-evaluation reads its own ministry's documents
+    // unless the analyst explicitly grants the cross-ministry exception.
+    let ready = indexed;
+    if (data.evaluationMode === "self_evaluation" && data.evaluatorMinistry && !data.crossMinistry) {
+      const own = indexed.filter(sameMinistry);
+      if (own.length === 0)
+        throw new Error(
+          `No indexed document belongs to ${data.evaluatorMinistry}. Index one of its documents, or enable the cross-ministry exception.`,
+        );
+      if (own.length < indexed.length)
+        warnings.push(
+          `${indexed.length - own.length} document(s) from other institutions were excluded: this run is scoped to ${data.evaluatorMinistry} only.`,
+        );
+      ready = own;
+    } else if (data.evaluationMode === "self_evaluation" && data.evaluatorMinistry) {
+      const own = indexed.filter(sameMinistry);
+      warnings.push(
+        own.length
+          ? `Cross-ministry exception is on: ${data.evaluatorMinistry} is evaluated against ${indexed.length - own.length} document(s) from other institutions.`
+          : `Cross-ministry exception is on, but no document belongs to ${data.evaluatorMinistry} — findings describe other institutions, not the evaluating one.`,
+      );
+    }
+
     if (ready.length < data.documentIds.length)
       warnings.push(
-        `${data.documentIds.length - ready.length} selected document(s) are not indexed and were excluded.`,
+        `${data.documentIds.length - ready.length} selected document(s) were excluded before analysis.`,
       );
     if (data.yearFrom !== null && data.yearTo !== null) {
       const outside = ready.filter(
@@ -71,12 +104,16 @@ export const startRun = createServerFn({ method: "POST" })
         slice_label: data.sliceLabel,
         year_from: data.yearFrom,
         year_to: data.yearTo,
+        evaluator_ministry: data.evaluatorMinistry,
+        evaluation_mode: data.evaluationMode,
+        cross_ministry: data.crossMinistry,
         status: "running",
         coverage_warning: warnings.length ? warnings.join(" ") : null,
       })
       .select("id, coverage_warning")
       .single();
     if (error) throw new Error(error.message);
+
 
     return {
       runId: run.id as string,
@@ -175,7 +212,10 @@ export const runAgentPass = createServerFn({ method: "POST" })
 
     const { data: run, error: runErr } = await context.supabase
       .from("analysis_runs")
-      .select("id, document_ids, slice_label, year_from, year_to")
+      .select(
+        "id, document_ids, slice_label, year_from, year_to, evaluator_ministry, evaluation_mode, cross_ministry",
+      )
+
       .eq("id", data.runId)
       .single();
     if (runErr) throw new Error(runErr.message);
@@ -260,13 +300,22 @@ export const runAgentPass = createServerFn({ method: "POST" })
       "5. severity: critical = a national target is unreachable as written; high = material delivery risk; medium = coordination or reporting defect.",
       "6. Recommend an analyst action. You have no authority to execute anything.",
       "Return at most 4 findings, the strongest ones only.",
+      run.evaluator_ministry
+        ? `Evaluation posture: this run is a self-evaluation deployed by ${run.evaluator_ministry}. Frame every finding as something ${run.evaluator_ministry} can verify or act on, and name the counterpart institution explicitly when the defect sits at a boundary you do not control.${run.cross_ministry ? " Documents from other institutions are included as an explicit exception, so cross-boundary dependencies are in scope." : " Only this institution's own documents are in scope; do not speculate about other institutions' plans."}`
+        : "Evaluation posture: this run is a central cross-government review (Bappenas). Compare institutions against each other and treat inter-ministerial inconsistency as a first-class finding.",
     ].join("\n");
 
+    const evaluator = run.evaluator_ministry
+      ? `Evaluating institution: ${run.evaluator_ministry} (self-evaluation${run.cross_ministry ? ", cross-ministry exception granted" : ", own documents only"})`
+      : "Evaluating institution: central review across all institutions";
+
     const input = [
+      evaluator,
       `Temporal slice: ${run.slice_label}${run.year_from ? ` (${run.year_from}-${run.year_to})` : ""}`,
       `Corpus in scope:\n${corpusManifest}`,
       `Retrieved passages:\n\n${evidence}`,
     ].join("\n\n");
+
 
     await trace("reasoning", "Reasoning over the retrieved evidence window.");
     const output = await generateStructured<AgentOutput>({

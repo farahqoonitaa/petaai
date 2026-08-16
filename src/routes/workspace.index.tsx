@@ -57,11 +57,15 @@ function RunConsole() {
     "contradiction_detector",
   ]);
   const [epochId, setEpochId] = useState(EPOCHS[0]!.id);
+  // Institutional entry point: who is running this evaluation.
+  const [evaluator, setEvaluator] = useState<string | null>(null);
+  const [crossMinistry, setCrossMinistry] = useState(true);
   const [passes, setPasses] = useState<Pass[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coverage, setCoverage] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
+
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -82,6 +86,24 @@ function RunConsole() {
   const fullSwarm = selectedAgents.length === AGENT_SPECS.length;
   const tracerOn = selectedAgents.includes("stigmergic_tracer");
 
+  const ministries = [...new Set(docs.map((d) => d.ministry).filter(Boolean))].sort();
+  const norm = (s: string) => s.trim().toLowerCase();
+  const ownDocs = evaluator ? docs.filter((d) => norm(d.ministry) === norm(evaluator)) : docs;
+  const foreignDocs = evaluator ? docs.filter((d) => norm(d.ministry) !== norm(evaluator)) : [];
+  const scopedOut = evaluator && !crossMinistry ? foreignDocs.map((d) => d.id) : [];
+
+  // A self-evaluation without the exception may only read its own documents.
+  function pickEvaluator(ministry: string | null, cross = crossMinistry) {
+    setEvaluator(ministry);
+    if (ministry && !cross) setSelectedDocs(docs.filter((d) => norm(d.ministry) === norm(ministry)).map((d) => d.id));
+    else setSelectedDocs(docs.map((d) => d.id));
+  }
+
+  function setException(next: boolean) {
+    setCrossMinistry(next);
+    if (evaluator) pickEvaluator(evaluator, next);
+  }
+
   function toggleAgent(id: AgentId) {
     setSelectedAgents((prev) =>
       prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id],
@@ -89,8 +111,10 @@ function RunConsole() {
   }
 
   function toggleDoc(id: string) {
+    if (scopedOut.includes(id)) return;
     setSelectedDocs((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
   }
+
 
   async function run() {
     setError(null);
@@ -108,7 +132,11 @@ function RunConsole() {
           sliceLabel: epoch.label,
           yearFrom: epoch.yearFrom,
           yearTo: epoch.yearTo,
+          evaluatorMinistry: evaluator,
+          evaluationMode: evaluator ? "self_evaluation" : "central_review",
+          crossMinistry: evaluator ? crossMinistry : true,
         },
+
       });
       setRunId(started.runId);
       setCoverage(started.coverageWarning);
@@ -167,9 +195,92 @@ function RunConsole() {
     <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
       <div>
         <section>
+          <p className="label-mono">step 1 · evaluating institution</p>
+          <h2 className="mt-2 text-lg font-semibold">
+            {evaluator ? `${evaluator} self-evaluation` : "Central cross-government review"}
+          </h2>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Who is running this evaluation decides what counts as a finding. A ministry evaluating
+            itself is judged on its own documents; a central review compares institutions against
+            each other.
+          </p>
+
+          {ministries.length === 0 ? (
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              Index a document first — the list of institutions is derived from your own corpus, never
+              invented.
+            </p>
+          ) : (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={evaluator === null}
+                onClick={() => pickEvaluator(null)}
+                className={`rounded-lg border px-3 py-2 text-xs transition-colors ${
+                  evaluator === null
+                    ? "border-primary/50 bg-primary/10 text-foreground"
+                    : "border-border bg-card text-muted-foreground hover:bg-surface-2"
+                }`}
+              >
+                Bappenas · all institutions
+              </button>
+              {ministries.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={evaluator === m}
+                  onClick={() => pickEvaluator(m)}
+                  className={`rounded-lg border px-3 py-2 text-xs transition-colors ${
+                    evaluator === m
+                      ? "border-primary/50 bg-primary/10 text-foreground"
+                      : "border-border bg-card text-muted-foreground hover:bg-surface-2"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {evaluator ? (
+            <div className="mt-4 rounded-lg border border-border bg-card p-4">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={crossMinistry}
+                onClick={() => setException(!crossMinistry)}
+                className="flex w-full items-start gap-3 text-left"
+              >
+                <span
+                  aria-hidden
+                  className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border font-mono text-[9px] ${
+                    crossMinistry
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border text-transparent"
+                  }`}
+                >
+                  ✓
+                </span>
+                <span>
+                  <span className="text-sm font-semibold">Cross-ministry exception</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                    {crossMinistry
+                      ? `On — ${foreignDocs.length} document(s) from other institutions stay in scope, so dependencies and contradictions at ${evaluator}'s boundaries can be detected.`
+                      : `Off — scoped to ${evaluator} only (${ownDocs.length} document(s)). Cross-boundary contradictions cannot be detected in this posture.`}
+                  </span>
+                </span>
+              </button>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="mt-10">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="label-mono">step 1 · entry point</p>
+              <p className="label-mono">step 2 · entry point</p>
+
               <h2 className="mt-2 text-lg font-semibold">
                 {fullSwarm ? "Full swarm analysis" : "Focused agent selection"}
               </h2>
@@ -254,7 +365,7 @@ function RunConsole() {
         </section>
 
         <section className="mt-10">
-          <p className="label-mono">step 2 · temporal slice</p>
+          <p className="label-mono">step 3 · temporal slice</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {EPOCHS.map((e) => (
               <button
@@ -276,17 +387,23 @@ function RunConsole() {
 
         <section className="mt-10">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <p className="label-mono">step 3 · corpus in scope</p>
+            <p className="label-mono">step 4 · corpus in scope</p>
             <button
               type="button"
-              onClick={() =>
-                setSelectedDocs(selectedDocs.length === docs.length ? [] : docs.map((d) => d.id))
-              }
+              onClick={() => {
+                const eligible = (evaluator && !crossMinistry ? ownDocs : docs).map((d) => d.id);
+                setSelectedDocs(selectedDocs.length === eligible.length ? [] : eligible);
+              }}
               className="font-mono text-[11px] text-muted-foreground hover:text-foreground"
             >
-              {selectedDocs.length === docs.length ? "clear all" : "select all"}
+              {selectedDocs.length > 0 ? "clear all" : "select all"}
             </button>
           </div>
+          {evaluator && !crossMinistry ? (
+            <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+              locked to {evaluator} — turn on the cross-ministry exception to widen scope
+            </p>
+          ) : null}
 
           {docs.length === 0 ? (
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
@@ -298,19 +415,27 @@ function RunConsole() {
             <ul className="mt-3 space-y-2">
               {docs.map((d) => {
                 const on = selectedDocs.includes(d.id);
+                const locked = scopedOut.includes(d.id);
                 return (
                   <li key={d.id}>
                     <button
                       type="button"
+                      disabled={locked}
                       onClick={() => toggleDoc(d.id)}
                       className={`flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
-                        on ? "border-primary/50 bg-primary/10" : "border-border bg-card hover:bg-surface-2"
+                        locked
+                          ? "cursor-not-allowed border-dashed border-border bg-card opacity-45"
+                          : on
+                            ? "border-primary/50 bg-primary/10"
+                            : "border-border bg-card hover:bg-surface-2"
                       }`}
                     >
                       <span className="text-sm">{d.title}</span>
                       <span className="flex flex-wrap gap-2">
                         <Chip>{d.ministry}</Chip>
                         <Chip>{d.doc_type}</Chip>
+                        <Chip>{locked ? "out of scope" : `${d.chunk_count} passages`}</Chip>
+
                         <Chip>{d.chunk_count} passages</Chip>
                       </span>
                     </button>
