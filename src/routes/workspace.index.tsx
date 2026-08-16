@@ -132,7 +132,11 @@ function RunConsole() {
           sliceLabel: epoch.label,
           yearFrom: epoch.yearFrom,
           yearTo: epoch.yearTo,
+          evaluatorMinistry: evaluator,
+          evaluationMode: evaluator ? "self_evaluation" : "central_review",
+          crossMinistry: evaluator ? crossMinistry : true,
         },
+
       });
       setRunId(started.runId);
       setCoverage(started.coverageWarning);
