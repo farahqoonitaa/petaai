@@ -21,7 +21,13 @@ const StartRun = z.object({
   sliceLabel: z.string().trim().min(1).max(120),
   yearFrom: z.number().int().min(1990).max(2060).nullable(),
   yearTo: z.number().int().min(1990).max(2060).nullable(),
+  /** Institution running the evaluation. Null = central cross-government review. */
+  evaluatorMinistry: z.string().trim().min(1).max(200).nullable().default(null),
+  evaluationMode: z.enum(["self_evaluation", "central_review"]).default("central_review"),
+  /** Exception: pull in other ministries' documents even in a self-evaluation. */
+  crossMinistry: z.boolean().default(true),
 });
+
 
 export const startRun = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
