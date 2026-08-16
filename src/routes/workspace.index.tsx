@@ -86,6 +86,24 @@ function RunConsole() {
   const fullSwarm = selectedAgents.length === AGENT_SPECS.length;
   const tracerOn = selectedAgents.includes("stigmergic_tracer");
 
+  const ministries = [...new Set(docs.map((d) => d.ministry).filter(Boolean))].sort();
+  const norm = (s: string) => s.trim().toLowerCase();
+  const ownDocs = evaluator ? docs.filter((d) => norm(d.ministry) === norm(evaluator)) : docs;
+  const foreignDocs = evaluator ? docs.filter((d) => norm(d.ministry) !== norm(evaluator)) : [];
+  const scopedOut = evaluator && !crossMinistry ? foreignDocs.map((d) => d.id) : [];
+
+  // A self-evaluation without the exception may only read its own documents.
+  function pickEvaluator(ministry: string | null, cross = crossMinistry) {
+    setEvaluator(ministry);
+    if (ministry && !cross) setSelectedDocs(docs.filter((d) => norm(d.ministry) === norm(ministry)).map((d) => d.id));
+    else setSelectedDocs(docs.map((d) => d.id));
+  }
+
+  function setException(next: boolean) {
+    setCrossMinistry(next);
+    if (evaluator) pickEvaluator(evaluator, next);
+  }
+
   function toggleAgent(id: AgentId) {
     setSelectedAgents((prev) =>
       prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id],
@@ -93,8 +111,10 @@ function RunConsole() {
   }
 
   function toggleDoc(id: string) {
+    if (scopedOut.includes(id)) return;
     setSelectedDocs((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
   }
+
 
   async function run() {
     setError(null);
