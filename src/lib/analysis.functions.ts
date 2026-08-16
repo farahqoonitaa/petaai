@@ -300,13 +300,22 @@ export const runAgentPass = createServerFn({ method: "POST" })
       "5. severity: critical = a national target is unreachable as written; high = material delivery risk; medium = coordination or reporting defect.",
       "6. Recommend an analyst action. You have no authority to execute anything.",
       "Return at most 4 findings, the strongest ones only.",
+      run.evaluator_ministry
+        ? `Evaluation posture: this run is a self-evaluation deployed by ${run.evaluator_ministry}. Frame every finding as something ${run.evaluator_ministry} can verify or act on, and name the counterpart institution explicitly when the defect sits at a boundary you do not control.${run.cross_ministry ? " Documents from other institutions are included as an explicit exception, so cross-boundary dependencies are in scope." : " Only this institution's own documents are in scope; do not speculate about other institutions' plans."}`
+        : "Evaluation posture: this run is a central cross-government review (Bappenas). Compare institutions against each other and treat inter-ministerial inconsistency as a first-class finding.",
     ].join("\n");
 
+    const evaluator = run.evaluator_ministry
+      ? `Evaluating institution: ${run.evaluator_ministry} (self-evaluation${run.cross_ministry ? ", cross-ministry exception granted" : ", own documents only"})`
+      : "Evaluating institution: central review across all institutions";
+
     const input = [
+      evaluator,
       `Temporal slice: ${run.slice_label}${run.year_from ? ` (${run.year_from}-${run.year_to})` : ""}`,
       `Corpus in scope:\n${corpusManifest}`,
       `Retrieved passages:\n\n${evidence}`,
     ].join("\n\n");
+
 
     await trace("reasoning", "Reasoning over the retrieved evidence window.");
     const output = await generateStructured<AgentOutput>({
