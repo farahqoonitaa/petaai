@@ -212,7 +212,10 @@ export const runAgentPass = createServerFn({ method: "POST" })
 
     const { data: run, error: runErr } = await context.supabase
       .from("analysis_runs")
-      .select("id, document_ids, slice_label, year_from, year_to")
+      .select(
+        "id, document_ids, slice_label, year_from, year_to, evaluator_ministry, evaluation_mode, cross_ministry",
+      )
+
       .eq("id", data.runId)
       .single();
     if (runErr) throw new Error(runErr.message);
