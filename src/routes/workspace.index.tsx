@@ -195,9 +195,92 @@ function RunConsole() {
     <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
       <div>
         <section>
+          <p className="label-mono">step 1 · evaluating institution</p>
+          <h2 className="mt-2 text-lg font-semibold">
+            {evaluator ? `${evaluator} self-evaluation` : "Central cross-government review"}
+          </h2>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Who is running this evaluation decides what counts as a finding. A ministry evaluating
+            itself is judged on its own documents; a central review compares institutions against
+            each other.
+          </p>
+
+          {ministries.length === 0 ? (
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              Index a document first — the list of institutions is derived from your own corpus, never
+              invented.
+            </p>
+          ) : (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={evaluator === null}
+                onClick={() => pickEvaluator(null)}
+                className={`rounded-lg border px-3 py-2 text-xs transition-colors ${
+                  evaluator === null
+                    ? "border-primary/50 bg-primary/10 text-foreground"
+                    : "border-border bg-card text-muted-foreground hover:bg-surface-2"
+                }`}
+              >
+                Bappenas · all institutions
+              </button>
+              {ministries.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={evaluator === m}
+                  onClick={() => pickEvaluator(m)}
+                  className={`rounded-lg border px-3 py-2 text-xs transition-colors ${
+                    evaluator === m
+                      ? "border-primary/50 bg-primary/10 text-foreground"
+                      : "border-border bg-card text-muted-foreground hover:bg-surface-2"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {evaluator ? (
+            <div className="mt-4 rounded-lg border border-border bg-card p-4">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={crossMinistry}
+                onClick={() => setException(!crossMinistry)}
+                className="flex w-full items-start gap-3 text-left"
+              >
+                <span
+                  aria-hidden
+                  className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border font-mono text-[9px] ${
+                    crossMinistry
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border text-transparent"
+                  }`}
+                >
+                  ✓
+                </span>
+                <span>
+                  <span className="text-sm font-semibold">Cross-ministry exception</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                    {crossMinistry
+                      ? `On — ${foreignDocs.length} document(s) from other institutions stay in scope, so dependencies and contradictions at ${evaluator}'s boundaries can be detected.`
+                      : `Off — scoped to ${evaluator} only (${ownDocs.length} document(s)). Cross-boundary contradictions cannot be detected in this posture.`}
+                  </span>
+                </span>
+              </button>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="mt-10">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="label-mono">step 1 · entry point</p>
+              <p className="label-mono">step 2 · entry point</p>
+
               <h2 className="mt-2 text-lg font-semibold">
                 {fullSwarm ? "Full swarm analysis" : "Focused agent selection"}
               </h2>
