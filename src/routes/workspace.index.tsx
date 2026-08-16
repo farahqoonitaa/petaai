@@ -365,7 +365,7 @@ function RunConsole() {
         </section>
 
         <section className="mt-10">
-          <p className="label-mono">step 2 · temporal slice</p>
+          <p className="label-mono">step 3 · temporal slice</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {EPOCHS.map((e) => (
               <button
@@ -387,7 +387,7 @@ function RunConsole() {
 
         <section className="mt-10">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <p className="label-mono">step 3 · corpus in scope</p>
+            <p className="label-mono">step 4 · corpus in scope</p>
             <button
               type="button"
               onClick={() =>
