@@ -20,7 +20,10 @@ export type Database = {
           completed_at: string | null
           coverage_warning: string | null
           created_at: string
+          cross_ministry: boolean
           document_ids: string[]
+          evaluation_mode: string
+          evaluator_ministry: string | null
           executive_summary: string | null
           id: string
           mode: string
@@ -36,7 +39,10 @@ export type Database = {
           completed_at?: string | null
           coverage_warning?: string | null
           created_at?: string
+          cross_ministry?: boolean
           document_ids?: string[]
+          evaluation_mode?: string
+          evaluator_ministry?: string | null
           executive_summary?: string | null
           id?: string
           mode?: string
@@ -52,7 +58,10 @@ export type Database = {
           completed_at?: string | null
           coverage_warning?: string | null
           created_at?: string
+          cross_ministry?: boolean
           document_ids?: string[]
+          evaluation_mode?: string
+          evaluator_ministry?: string | null
           executive_summary?: string | null
           id?: string
           mode?: string
