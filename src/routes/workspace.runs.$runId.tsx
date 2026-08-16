@@ -63,7 +63,11 @@ interface Run {
   executive_summary: string | null;
   coverage_warning: string | null;
   created_at: string;
+  evaluator_ministry: string | null;
+  evaluation_mode: string | null;
+  cross_ministry: boolean | null;
 }
+
 
 function RunReport() {
   const { runId } = Route.useParams();
