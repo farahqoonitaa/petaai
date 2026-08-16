@@ -35,18 +35,45 @@ export const startRun = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: docs, error: docErr } = await context.supabase
       .from("corpus_documents")
-      .select("id, title, doc_year, status, chunk_count")
+      .select("id, title, ministry, doc_year, status, chunk_count")
       .in("id", data.documentIds);
     if (docErr) throw new Error(docErr.message);
 
-    const ready = (docs ?? []).filter((d) => d.status === "ready" && (d.chunk_count ?? 0) > 0);
-    if (ready.length === 0)
+    const indexed = (docs ?? []).filter((d) => d.status === "ready" && (d.chunk_count ?? 0) > 0);
+    if (indexed.length === 0)
       throw new Error("None of the selected documents finished indexing — nothing to analyse.");
 
     const warnings: string[] = [];
+    const sameMinistry = (d: { ministry: string | null }) =>
+      !!data.evaluatorMinistry &&
+      (d.ministry ?? "").trim().toLowerCase() === data.evaluatorMinistry.trim().toLowerCase();
+
+    // Institutional scoping: a self-evaluation reads its own ministry's documents
+    // unless the analyst explicitly grants the cross-ministry exception.
+    let ready = indexed;
+    if (data.evaluationMode === "self_evaluation" && data.evaluatorMinistry && !data.crossMinistry) {
+      const own = indexed.filter(sameMinistry);
+      if (own.length === 0)
+        throw new Error(
+          `No indexed document belongs to ${data.evaluatorMinistry}. Index one of its documents, or enable the cross-ministry exception.`,
+        );
+      if (own.length < indexed.length)
+        warnings.push(
+          `${indexed.length - own.length} document(s) from other institutions were excluded: this run is scoped to ${data.evaluatorMinistry} only.`,
+        );
+      ready = own;
+    } else if (data.evaluationMode === "self_evaluation" && data.evaluatorMinistry) {
+      const own = indexed.filter(sameMinistry);
+      warnings.push(
+        own.length
+          ? `Cross-ministry exception is on: ${data.evaluatorMinistry} is evaluated against ${indexed.length - own.length} document(s) from other institutions.`
+          : `Cross-ministry exception is on, but no document belongs to ${data.evaluatorMinistry} — findings describe other institutions, not the evaluating one.`,
+      );
+    }
+
     if (ready.length < data.documentIds.length)
       warnings.push(
-        `${data.documentIds.length - ready.length} selected document(s) are not indexed and were excluded.`,
+        `${data.documentIds.length - ready.length} selected document(s) were excluded before analysis.`,
       );
     if (data.yearFrom !== null && data.yearTo !== null) {
       const outside = ready.filter(
@@ -77,12 +104,16 @@ export const startRun = createServerFn({ method: "POST" })
         slice_label: data.sliceLabel,
         year_from: data.yearFrom,
         year_to: data.yearTo,
+        evaluator_ministry: data.evaluatorMinistry,
+        evaluation_mode: data.evaluationMode,
+        cross_ministry: data.crossMinistry,
         status: "running",
         coverage_warning: warnings.length ? warnings.join(" ") : null,
       })
       .select("id, coverage_warning")
       .single();
     if (error) throw new Error(error.message);
+
 
     return {
       runId: run.id as string,
