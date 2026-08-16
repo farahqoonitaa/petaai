@@ -124,11 +124,19 @@ function RunReport() {
         <div>
           <p className="label-mono">
             {run.mode === "full_swarm" ? "full swarm analysis" : "focused analysis"} ·{" "}
+          <p className="label-mono">
+            {run.mode === "full_swarm" ? "full swarm analysis" : "focused analysis"} ·{" "}
             {run.slice_label}
+          </p>
+          <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
+            {run.evaluator_ministry
+              ? `evaluated by ${run.evaluator_ministry} · ${run.cross_ministry ? "cross-ministry exception granted" : "own documents only"}`
+              : "central cross-government review · all institutions in scope"}
           </p>
           <h2 className="mt-2 text-xl font-semibold">
             {findings.length} finding{findings.length === 1 ? "" : "s"} across{" "}
             {run.document_ids.length} document{run.document_ids.length === 1 ? "" : "s"}
+
           </h2>
         </div>
         <span className="font-mono text-[11px] text-muted-foreground">
