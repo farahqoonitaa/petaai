@@ -57,11 +57,15 @@ function RunConsole() {
     "contradiction_detector",
   ]);
   const [epochId, setEpochId] = useState(EPOCHS[0]!.id);
+  // Institutional entry point: who is running this evaluation.
+  const [evaluator, setEvaluator] = useState<string | null>(null);
+  const [crossMinistry, setCrossMinistry] = useState(true);
   const [passes, setPasses] = useState<Pass[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coverage, setCoverage] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
+
 
   const load = useCallback(async () => {
     const { data } = await supabase
